@@ -4,7 +4,7 @@ CLI Go per versionare e rilasciare in modo indipendente i microservizi di un mon
 
 Supporta anche i repo standard con l'opzione --root, l'utilità in questo caso è ovviamente inferiore e non necessita di file di configurazione.
 
-## Che problema risolve
+## Che problema risolve?
 
 In un monorepo con più microservizi, il repository Git è condiviso ma le release spesso sono indipendenti.
 
