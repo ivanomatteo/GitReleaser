@@ -1,6 +1,100 @@
-# releaser
+# Git Releaser
 
 CLI Go per versionare e rilasciare in modo indipendente i microservizi di un monorepo. I tag Git nel formato `<service>/v<semver>` sono l'unica fonte delle versioni: il progetto non usa file `VERSION`.
+
+Supporta anche i repo standard con l'opzione --root, l'utilità in questo caso è ovviamente inferiore e non necessita di file di configurazione.
+
+## Che problema risolve
+
+In un monorepo con più microservizi, il repository Git è condiviso ma le release spesso sono indipendenti.
+
+Un servizio può essere alla `2.4.1`, un altro alla `1.8.3`, e una modifica a un modulo `common` può rendere necessario rilasciare solo alcuni servizi.
+
+Il problema è quindi capire in modo semplice:
+
+* qual è l’ultima release di ogni servizio;
+* quali modifiche sono avvenute da quella release;
+* quali servizi risultano realmente `affected`;
+* quale sarà la prossima versione o il prossimo tag.
+
+Molti tool gestiscono il versioning mantenendo la versione anche nei sorgenti, ad esempio in `package.json`, `pom.xml` o file `VERSION`.
+
+Questo progetto evita volutamente un secondo stato da sincronizzare e usa una sola source of truth:
+
+```text id="pazl0w"
+Git tag = release effettiva
+```
+
+Ogni servizio utilizza tag namespacizzati:
+
+```text id="3vctve"
+api/v2.4.1
+worker/v1.8.3
+scraper/v0.6.0
+```
+
+Per determinare se un servizio è cambiato, il tool confronta `HEAD` con il suo ultimo tag:
+
+```text id="qb4rxb"
+api/v2.4.1..HEAD
+worker/v1.8.3..HEAD
+```
+
+Ogni servizio ha quindi una baseline indipendente, anche se tutti condividono la stessa history Git.
+
+Le dipendenze condivise vengono dichiarate esplicitamente:
+
+```yaml id="7kzr6a"
+services:
+  api:
+    paths:
+      - services/api
+    dependencies:
+      - common/auth
+      - common/logging
+```
+
+Se cambia una dipendenza, il servizio viene considerato `affected` rispetto alla propria ultima release.
+
+### Perché non usare un tool più completo?
+
+Esistono strumenti come Nx Release, Changesets, Lerna o release-please che offrono funzionalità molto più estese: changelog, Conventional Commits, publishing, dependency graph automatici e integrazione con specifici ecosistemi.
+
+Questo progetto è **volutamente minimale**.
+
+Non cerca di gestire build, deployment, package registry, changelog o workflow Git.
+
+Fa essenzialmente quattro cose:
+
+```text id="5bvgm2"
+trova l'ultima release
+determina se il servizio è cambiato
+calcola la prossima versione
+crea il relativo tag
+```
+
+Lavora solo con:
+
+```text id="puqgq7"
+Git
+path
+dipendenze dichiarate
+SemVer
+```
+
+Per questo rimane indipendente dal linguaggio, dal build system e dalla piattaforma CI/CD.
+
+L’idea di fondo è semplice:
+
+```text id="u0ec5a"
+monorepo != mono-version
+repository != release unit
+```
+
+Il repository rappresenta lo stato complessivo del codice.
+
+I tag rappresentano invece le release delle singole unità deployabili.
+
 
 ## Requisiti e build
 
