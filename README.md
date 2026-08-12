@@ -6,6 +6,8 @@ CLI Go per versionare e rilasciare in modo indipendente i microservizi di un mon
 
 Sono richiesti Go 1.22 o successivo e Git disponibile nel `PATH`.
 
+I binari precompilati per Linux, macOS e Windows sono disponibili nella [release più recente su GitHub](https://github.com/ivanomatteo/GitReleaser/releases/latest).
+
 ```sh
 go build -o releaser ./cmd/releaser
 ```
