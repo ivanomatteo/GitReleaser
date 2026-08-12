@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -267,8 +268,15 @@ func (a *app) planCommand() *cobra.Command {
 
 func (a *app) releaseCommand() *cobra.Command {
 	var explicit string
-	var dry, push, force, affected, all bool
-	c := &cobra.Command{Use: "release <service> [patch|minor|major] | release (--affected|--all --force) <patch|minor|major>", Args: cobra.RangeArgs(1, 2), RunE: func(cmd *cobra.Command, args []string) error {
+	var prefix string
+	var dry, push, force, affected, all, root bool
+	c := &cobra.Command{Use: "release <service> [patch|minor|major] | release (--affected|--all|--root) <patch|minor|major>", Args: cobra.MaximumNArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+		if root {
+			return a.releaseRoot(cmd, args, explicit, prefix, dry, push, force, affected, all)
+		}
+		if cmd.Flags().Changed("prefix") {
+			return codedError{1, errors.New("--prefix can only be used with --root")}
+		}
 		e, err := a.engine(false)
 		if err != nil {
 			return err
@@ -395,7 +403,120 @@ func (a *app) releaseCommand() *cobra.Command {
 	c.Flags().BoolVar(&force, "force", false, "release even if the service is not affected")
 	c.Flags().BoolVar(&affected, "affected", false, "release all affected services")
 	c.Flags().BoolVar(&all, "all", false, "release all services (requires --force)")
+	c.Flags().BoolVar(&root, "root", false, "release the repository as a single project (no configuration required)")
+	c.Flags().StringVar(&prefix, "prefix", "", "tag prefix for a root release (empty means tags such as v1.2.3)")
 	return c
+}
+
+var rootTagPattern = regexp.MustCompile(`^(.*)v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:[-+].*)?$`)
+
+func (a *app) releaseRoot(cmd *cobra.Command, args []string, explicit, prefix string, dry, push, force, affected, all bool) error {
+	if affected || all {
+		return codedError{1, errors.New("--root cannot be used with --affected or --all")}
+	}
+	if len(args) > 1 || (explicit == "" && len(args) != 1) || (explicit != "" && len(args) != 0) {
+		return codedError{1, errors.New("root release requires one bump or --version")}
+	}
+	g := gitclient.Client{Dir: a.repo}
+	if err := g.CheckRepository(); err != nil {
+		return codedError{3, err}
+	}
+	tags, err := g.Tags("*")
+	if err != nil {
+		return classify(err)
+	}
+	prefixSet := map[string]bool{}
+	for _, tag := range tags {
+		if m := rootTagPattern.FindStringSubmatch(tag); m != nil {
+			if _, parseErr := version.Parse(strings.TrimPrefix(tag, m[1]+"v")); parseErr == nil {
+				prefixSet[m[1]] = true
+			}
+		}
+	}
+	prefixSpecified := cmd.Flags().Changed("prefix")
+	if !prefixSpecified {
+		if len(prefixSet) > 1 {
+			return codedError{1, errors.New("release tags use heterogeneous prefixes; --prefix is required")}
+		}
+		for p := range prefixSet {
+			prefix = p
+		}
+	}
+	var current *service.Release
+	for _, tag := range tags {
+		want := prefix + "v"
+		if !strings.HasPrefix(tag, want) {
+			continue
+		}
+		v, parseErr := version.Parse(strings.TrimPrefix(tag, want))
+		if parseErr != nil {
+			continue
+		}
+		if current == nil || version.Compare(v, current.Version) > 0 {
+			current = &service.Release{Version: v, Tag: tag}
+		}
+	}
+	var next version.Version
+	if explicit != "" {
+		next, err = version.Parse(explicit)
+	} else if current == nil {
+		return codedError{1, errors.New("repository has no released version; use --version for the initial release")}
+	} else {
+		next, err = current.Version.Bump(args[0])
+	}
+	if err != nil {
+		return codedError{1, err}
+	}
+	if current != nil {
+		if _, err = g.Resolve(current.Tag); err != nil {
+			return codedError{3, gitclient.ErrIncompleteHistory}
+		}
+		ancestor, ancestorErr := g.IsAncestor(current.Tag, "HEAD")
+		if ancestorErr != nil {
+			return classify(ancestorErr)
+		}
+		if !ancestor {
+			return codedError{1, fmt.Errorf("release tag %s is not an ancestor of HEAD", current.Tag)}
+		}
+		files, diffErr := g.DiffFiles(current.Tag, "HEAD")
+		if diffErr != nil {
+			return classify(diffErr)
+		}
+		if len(files) == 0 && !force {
+			return codedError{1, errors.New("repository has no changes since the previous tag; use --force to create a release anyway")}
+		}
+	}
+	tag := prefix + "v" + next.String()
+	if existing, tagsErr := g.Tags(tag); tagsErr != nil {
+		return classify(tagsErr)
+	} else if len(existing) > 0 {
+		return codedError{1, fmt.Errorf("tag %s already exists", tag)}
+	}
+	cur := "none"
+	if current != nil {
+		cur = current.Version.String()
+	}
+	if dry {
+		fmt.Fprintf(a.out, "Repository root\nCurrent version: %s\nNext version: %s\nTag: %s\n\nNo changes have been made.\n", cur, next.String(), tag)
+		return nil
+	}
+	clean, err := g.IsClean()
+	if err != nil {
+		return classify(err)
+	}
+	if !clean {
+		return codedError{1, errors.New("working tree is not clean")}
+	}
+	if err = g.CreateTag(tag, "HEAD", "Release v"+next.String()); err != nil {
+		return classify(err)
+	}
+	if push {
+		if err = g.PushTag("origin", tag); err != nil {
+			return classify(err)
+		}
+	}
+	fmt.Fprintln(a.out, tag)
+	return nil
 }
 
 func (a *app) configCommand() *cobra.Command {

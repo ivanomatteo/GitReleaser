@@ -124,3 +124,91 @@ func TestReleaseRequiresAffectedUnlessForced(t *testing.T) {
 		t.Fatalf("forced release did not create tag, got %q", tag)
 	}
 }
+
+func TestRootReleaseWithoutConfiguration(t *testing.T) {
+	repo, git := rootTestRepo(t)
+	git("tag", "-a", "v0.1.5", "-m", "initial release")
+	os.WriteFile(filepath.Join(repo, "main.go"), []byte("package main\n// change\n"), 0o644)
+	git("add", ".")
+	git("commit", "-m", "change")
+
+	cmd := New()
+	cmd.SetArgs([]string{"--repo", repo, "release", "--root", "patch"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("root release failed: %v", err)
+	}
+	if got := git("tag", "--list", "v0.1.6"); got != "v0.1.6" {
+		t.Fatalf("unexpected tag %q", got)
+	}
+
+	cmd = New()
+	cmd.SetArgs([]string{"--repo", repo, "release", "--root", "minor"})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "--force") {
+		t.Fatalf("expected force error, got %v", err)
+	}
+}
+
+func TestRootReleaseBootstrapAndPrefixRules(t *testing.T) {
+	repo, git := rootTestRepo(t)
+	cmd := New()
+	cmd.SetArgs([]string{"--repo", repo, "release", "--root", "--version", "1.0.0"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("bootstrap failed: %v", err)
+	}
+	if got := git("tag", "--list", "v1.0.0"); got != "v1.0.0" {
+		t.Fatalf("unexpected bootstrap tag %q", got)
+	}
+
+	git("tag", "-a", "release-v2.0.0", "-m", "other prefix")
+	os.WriteFile(filepath.Join(repo, "main.go"), []byte("package main\n// next\n"), 0o644)
+	git("add", ".")
+	git("commit", "-m", "next")
+	cmd = New()
+	cmd.SetArgs([]string{"--repo", repo, "release", "--root", "patch"})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "heterogeneous prefixes") {
+		t.Fatalf("expected prefix error, got %v", err)
+	}
+	cmd = New()
+	cmd.SetArgs([]string{"--repo", repo, "release", "--root", "--prefix=", "patch"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("explicit empty prefix failed: %v", err)
+	}
+	if got := git("tag", "--list", "v1.0.1"); got != "v1.0.1" {
+		t.Fatalf("unexpected explicit-prefix tag %q", got)
+	}
+}
+
+func TestRootReleaseRejectsBulkModes(t *testing.T) {
+	repo, _ := rootTestRepo(t)
+	for _, flag := range []string{"--affected", "--all"} {
+		cmd := New()
+		cmd.SetArgs([]string{"--repo", repo, "release", "--root", flag, "patch"})
+		if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "cannot be used") {
+			t.Fatalf("expected incompatibility for %s, got %v", flag, err)
+		}
+	}
+}
+
+func rootTestRepo(t *testing.T) (string, func(...string) string) {
+	t.Helper()
+	repo := t.TempDir()
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	git("init")
+	git("config", "user.name", "Test")
+	git("config", "user.email", "test@example.com")
+	if err := os.WriteFile(filepath.Join(repo, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "-m", "initial")
+	return repo, git
+}

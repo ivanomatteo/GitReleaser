@@ -755,6 +755,21 @@ releaser release --all --force <patch|minor|major>
 
 Prima di creare il primo tag, il comando deve validare l'intero batch: configurazione dei servizi, stato della history, bump, presenza di una release precedente, unicità di tutti i nuovi tag e working tree pulita. Un errore di validazione non deve quindi lasciare tag parziali. L'ordine di elaborazione è quello alfabetico dei servizi. `--dry-run` deve mostrare tutti i tag senza modificarli; `--push` deve pubblicare ogni tag creato sul remote configurato.
 
+## 23.2 Release della root di un repository standard
+
+Per repository non monorepo, la release opera sull'intera root senza caricare né richiedere `releaser.yml`:
+
+```bash
+releaser release --root <patch|minor|major> [--dry-run] [--push]
+releaser release --root --version <Initial SemVer> [--dry-run] [--push]
+```
+
+Il tag ha forma `<prefix>v<semver>`. Il prefix predefinito viene dedotto dai tag release precedenti; in assenza di release è vuoto e produce, per esempio, `v0.1.5`. `--prefix=''` richiede esplicitamente un prefix vuoto. Se i tag release individuati hanno prefix eterogenei, il comando deve fallire e rendere obbligatorio `--prefix`.
+
+Il bump richiede una release precedente; il bootstrap usa `--version` e una SemVer strict. Se non esistono modifiche tra il tag precedente selezionato e `HEAD`, il comando fallisce salvo uso esplicito di `--force`. Restano obbligatorie l'ascendenza del tag, l'unicità del nuovo tag e la working tree pulita. `--dry-run` non crea tag; `--push` pubblica il tag su `origin`.
+
+`--root`, `--affected` e `--all` sono modalità mutuamente esclusive.
+
 ---
 
 # 24. Release con versione esplicita

@@ -185,6 +185,24 @@ releaser release --all --force major
 
 Il comando valida l'intero batch prima di creare tag. Ogni servizio deve avere una release precedente, perché la versione esplicita non è supportata in modalità bulk. `--dry-run` e `--push` sono disponibili anche per le release in blocco; con `--push` ogni tag creato viene pubblicato sul remote configurato.
 
+### Repository standard (root)
+
+Per rilasciare un repository standard, non organizzato come monorepo, usa `--root`. In questa modalità `releaser.yml` non è letto:
+
+```sh
+releaser release --root patch
+releaser release --root --version 1.0.0
+```
+
+Il tag predefinito non ha prefix, per esempio `v0.1.5`. Se esiste già una release, il prefix viene dedotto dai tag precedenti; se vengono trovati prefix eterogenei, `--prefix` diventa obbligatorio. Un valore esplicitamente vuoto (`--prefix=''`) seleziona tag senza prefix:
+
+```sh
+releaser release --root patch --prefix=''
+releaser release --root minor --prefix='release-'
+```
+
+Se non ci sono commit con modifiche dopo il tag precedente, la release richiede `--force`. `--dry-run` e `--push` sono supportati; il push usa `origin`. `--root` è mutuamente esclusivo con `--affected` e `--all`.
+
 ## Exit code ed errori
 
 Gli errori sono scritti su stderr con prefisso `ERROR:`. Gli exit code sono:
@@ -214,6 +232,8 @@ releaser release <service> <patch|minor|major> [--dry-run] [--push] [--force]
 releaser release <service> --version <semver> [--dry-run] [--push] [--force]
 releaser release --affected <patch|minor|major> [--dry-run] [--push]
 releaser release --all --force <patch|minor|major> [--dry-run] [--push]
+releaser release --root <patch|minor|major> [--prefix=<prefix>] [--dry-run] [--push] [--force]
+releaser release --root --version <semver> [--prefix=<prefix>] [--dry-run] [--push]
 ```
 
 Usa `releaser --help` o `releaser <comando> --help` per l'help integrato.
