@@ -267,58 +267,106 @@ func (a *app) planCommand() *cobra.Command {
 
 func (a *app) releaseCommand() *cobra.Command {
 	var explicit string
-	var dry, push, force bool
-	c := &cobra.Command{Use: "release <service> [patch|minor|major]", Args: cobra.RangeArgs(1, 2), RunE: func(cmd *cobra.Command, args []string) error {
+	var dry, push, force, affected, all bool
+	c := &cobra.Command{Use: "release <service> [patch|minor|major] | release (--affected|--all --force) <patch|minor|major>", Args: cobra.RangeArgs(1, 2), RunE: func(cmd *cobra.Command, args []string) error {
 		e, err := a.engine(false)
 		if err != nil {
 			return err
 		}
-		if _, err = e.RequireService(args[0]); err != nil {
-			return err
+		if affected && all {
+			return codedError{1, errors.New("use either --affected or --all, not both")}
 		}
-		if explicit != "" && len(args) == 2 {
+		bulk := affected || all
+		if all && !force {
+			return codedError{1, errors.New("--all requires --force")}
+		}
+		if bulk && (len(args) != 1 || explicit != "") {
+			return codedError{1, errors.New("bulk release requires exactly one patch, minor, or major bump")}
+		}
+		if !bulk && explicit != "" && len(args) == 2 {
 			return codedError{1, errors.New("use either a bump or --version, not both")}
 		}
-		current, err := e.Latest(args[0])
-		if err != nil {
-			return classify(err)
-		}
-		status, err := e.Status(args[0])
-		if err != nil {
-			return classify(err)
-		}
-		if !status.Affected && !force {
-			return codedError{1, fmt.Errorf("service %s is not affected; use --force to create a release anyway", args[0])}
-		}
-		var next version.Version
-		if explicit != "" {
-			next, err = version.Parse(explicit)
+
+		names := []string{}
+		bump := ""
+		if bulk {
+			bump = args[0]
+			if bump != "patch" && bump != "minor" && bump != "major" {
+				return codedError{1, fmt.Errorf("invalid bump %q: expected patch, minor, or major", bump)}
+			}
+			for _, name := range e.Names() {
+				status, statusErr := e.Status(name)
+				if statusErr != nil {
+					return classify(statusErr)
+				}
+				if all || status.Affected {
+					names = append(names, name)
+				}
+			}
 		} else {
-			if len(args) != 2 {
-				return codedError{1, errors.New("a bump or --version is required")}
+			if _, err = e.RequireService(args[0]); err != nil {
+				return err
 			}
-			if current == nil {
-				return unreleased(args[0])
+			names = append(names, args[0])
+			if len(args) == 2 {
+				bump = args[1]
 			}
-			next, err = current.Version.Bump(args[1])
 		}
-		if err != nil {
-			return codedError{1, err}
+
+		type releaseItem struct {
+			name, current, tag string
+			next               version.Version
 		}
-		tag := args[0] + "/v" + next.String()
-		tags, err := e.Git.Tags(tag)
-		if err != nil {
-			return classify(err)
-		}
-		if len(tags) > 0 {
-			return codedError{1, fmt.Errorf("tag %s already exists", tag)}
-		}
-		cur := "none"
-		if current != nil {
-			cur = current.Version.String()
+		items := make([]releaseItem, 0, len(names))
+		for _, name := range names {
+			current, latestErr := e.Latest(name)
+			if latestErr != nil {
+				return classify(latestErr)
+			}
+			status, statusErr := e.Status(name)
+			if statusErr != nil {
+				return classify(statusErr)
+			}
+			if !status.Affected && !force {
+				return codedError{1, fmt.Errorf("service %s is not affected; use --force to create a release anyway", name)}
+			}
+			var next version.Version
+			if explicit != "" {
+				next, err = version.Parse(explicit)
+			} else {
+				if bump == "" {
+					return codedError{1, errors.New("a bump or --version is required")}
+				}
+				if current == nil {
+					return unreleased(name)
+				}
+				next, err = current.Version.Bump(bump)
+			}
+			if err != nil {
+				return codedError{1, err}
+			}
+			tag := name + "/v" + next.String()
+			tags, tagsErr := e.Git.Tags(tag)
+			if tagsErr != nil {
+				return classify(tagsErr)
+			}
+			if len(tags) > 0 {
+				return codedError{1, fmt.Errorf("tag %s already exists", tag)}
+			}
+			cur := "none"
+			if current != nil {
+				cur = current.Version.String()
+			}
+			items = append(items, releaseItem{name: name, current: cur, next: next, tag: tag})
 		}
 		if dry {
-			fmt.Fprintf(a.out, "Service: %s\nCurrent version: %s\nNext version: %s\nTag: %s\n\nNo changes have been made.\n", args[0], cur, next.String(), tag)
+			for i, item := range items {
+				if i > 0 {
+					fmt.Fprintln(a.out)
+				}
+				fmt.Fprintf(a.out, "Service: %s\nCurrent version: %s\nNext version: %s\nTag: %s\n", item.name, item.current, item.next.String(), item.tag)
+			}
+			fmt.Fprintln(a.out, "\nNo changes have been made.")
 			return nil
 		}
 		clean, err := e.Git.IsClean()
@@ -328,21 +376,25 @@ func (a *app) releaseCommand() *cobra.Command {
 		if !clean {
 			return codedError{1, errors.New("working tree is not clean")}
 		}
-		if err = e.Git.CreateTag(tag, "HEAD", fmt.Sprintf("Release %s v%s", args[0], next.String())); err != nil {
-			return classify(err)
-		}
-		if push {
-			if err = e.Git.PushTag(e.Config.Remote, tag); err != nil {
+		for _, item := range items {
+			if err = e.Git.CreateTag(item.tag, "HEAD", fmt.Sprintf("Release %s v%s", item.name, item.next.String())); err != nil {
 				return classify(err)
 			}
+			if push {
+				if err = e.Git.PushTag(e.Config.Remote, item.tag); err != nil {
+					return classify(err)
+				}
+			}
+			fmt.Fprintln(a.out, item.tag)
 		}
-		fmt.Fprintln(a.out, tag)
 		return nil
 	}}
 	c.Flags().StringVar(&explicit, "version", "", "explicit semantic version")
 	c.Flags().BoolVar(&dry, "dry-run", false, "show without creating the tag")
 	c.Flags().BoolVar(&push, "push", false, "push the tag to the configured remote")
 	c.Flags().BoolVar(&force, "force", false, "release even if the service is not affected")
+	c.Flags().BoolVar(&affected, "affected", false, "release all affected services")
+	c.Flags().BoolVar(&all, "all", false, "release all services (requires --force)")
 	return c
 }
 

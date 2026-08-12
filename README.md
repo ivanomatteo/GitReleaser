@@ -169,6 +169,22 @@ releaser release api patch --push
 
 Con `--push`, il comando pubblica soltanto il nuovo tag sul remote configurato. Non vengono eseguiti fetch, pull, build o deploy impliciti.
 
+### Release in blocco
+
+Per applicare lo stesso bump a tutti e soli i servizi affected:
+
+```sh
+releaser release --affected patch
+```
+
+Per applicarlo a tutti i servizi configurati, inclusi quelli non affected, occorre confermare esplicitamente con `--force`:
+
+```sh
+releaser release --all --force major
+```
+
+Il comando valida l'intero batch prima di creare tag. Ogni servizio deve avere una release precedente, perché la versione esplicita non è supportata in modalità bulk. `--dry-run` e `--push` sono disponibili anche per le release in blocco; con `--push` ogni tag creato viene pubblicato sul remote configurato.
+
 ## Exit code ed errori
 
 Gli errori sono scritti su stderr con prefisso `ERROR:`. Gli exit code sono:
@@ -196,6 +212,8 @@ releaser next-version-tag <service> <patch|minor|major>
 releaser plan [--format table|json]
 releaser release <service> <patch|minor|major> [--dry-run] [--push] [--force]
 releaser release <service> --version <semver> [--dry-run] [--push] [--force]
+releaser release --affected <patch|minor|major> [--dry-run] [--push]
+releaser release --all --force <patch|minor|major> [--dry-run] [--push]
 ```
 
 Usa `releaser --help` o `releaser <comando> --help` per l'help integrato.

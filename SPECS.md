@@ -737,6 +737,24 @@ releaser release scraper-service patch --force
 
 `--force` ignora esclusivamente il controllo affected; restano valide tutte le altre verifiche, inclusi versione, unicità del tag e working tree pulita.
 
+## 23.1 Release in blocco
+
+Per rilasciare con lo stesso bump tutti i servizi affected:
+
+```bash
+releaser release --affected <patch|minor|major>
+```
+
+Per rilasciare tutti i servizi configurati, anche se non affected:
+
+```bash
+releaser release --all --force <patch|minor|major>
+```
+
+`--affected` e `--all` sono mutuamente esclusivi. `--all` richiede sempre `--force`, così il superamento del controllo affected rimane esplicito. La modalità bulk non supporta `--version`: ciascun servizio deve avere una release precedente dalla quale calcolare il bump.
+
+Prima di creare il primo tag, il comando deve validare l'intero batch: configurazione dei servizi, stato della history, bump, presenza di una release precedente, unicità di tutti i nuovi tag e working tree pulita. Un errore di validazione non deve quindi lasciare tag parziali. L'ordine di elaborazione è quello alfabetico dei servizi. `--dry-run` deve mostrare tutti i tag senza modificarli; `--push` deve pubblicare ogni tag creato sul remote configurato.
+
 ---
 
 # 24. Release con versione esplicita
