@@ -1,62 +1,39 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 version: 2
 project_name: git-releaser
 
-before:
-  hooks:
-    - go mod tidy
-
 builds:
-  - id: linux
+  - id: releaser
+    main: ./cmd/releaser
+    binary: releaser
     env:
       - CGO_ENABLED=0
     goos:
       - linux
-    goarch:
-      - amd64
-      - arm64
-    # Personalizza il nome del binario finale
-    binary: releaser
-    ldflags:
-      - -s -w -X main.version={{.Version}}
-
-  - id: windows
-    env:
-      - CGO_ENABLED=0
-    goos:
       - windows
     goarch:
       - amd64
       - arm64
-    # Personalizza il nome del binario finale
-    binary: releaser
     ldflags:
-      - -s -w -X main.version={{.Version}}
+      - -s -w
 
 archives:
-  - id: linux
+  - id: releaser
     ids:
-      - linux
-    format: zip
+      - releaser
+    formats:
+      - tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    files:
-      - ReadMe.md
-      - LICENSE*
-
-
-  - id: windows
-    ids:
-      - windows
-    format: zip
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    files:
-      - ReadMe.md
-      - LICENSE*
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
 
 checksum:
   name_template: "checksums.txt"
 
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc

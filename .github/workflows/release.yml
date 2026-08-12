@@ -1,12 +1,12 @@
-name: Release Mini Http Proxy Go
+name: Release git-releaser
 
 on:
   push:
     tags:
-      - 'v*' # Si attiva quando fai il push di un tag che inizia con 'v'
+      - "v*"
 
 permissions:
-  contents: write # Permesso necessario per creare la release e caricare i file
+  contents: write
 
 jobs:
   goreleaser:
@@ -15,18 +15,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Fondamentale per generare il changelog correttamente
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21' # O la versione che preferisci
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        run: go test ./...
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
-          version: latest
+          version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
