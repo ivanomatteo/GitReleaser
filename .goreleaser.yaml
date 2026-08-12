@@ -1,0 +1,66 @@
+version: 2
+project_name: git-releaser
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: linux
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    # Personalizza il nome del binario finale
+    binary: releaser
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+  - id: windows
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # Personalizza il nome del binario finale
+    binary: releaser
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: linux
+    ids:
+      - linux
+    format: zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - ReadMe.md
+      - LICENSE*
+
+
+  - id: windows
+    ids:
+      - windows
+    format: zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - ReadMe.md
+      - LICENSE*
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
