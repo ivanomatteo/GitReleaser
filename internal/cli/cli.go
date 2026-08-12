@@ -267,7 +267,7 @@ func (a *app) planCommand() *cobra.Command {
 
 func (a *app) releaseCommand() *cobra.Command {
 	var explicit string
-	var dry, push bool
+	var dry, push, force bool
 	c := &cobra.Command{Use: "release <service> [patch|minor|major]", Args: cobra.RangeArgs(1, 2), RunE: func(cmd *cobra.Command, args []string) error {
 		e, err := a.engine(false)
 		if err != nil {
@@ -282,6 +282,13 @@ func (a *app) releaseCommand() *cobra.Command {
 		current, err := e.Latest(args[0])
 		if err != nil {
 			return classify(err)
+		}
+		status, err := e.Status(args[0])
+		if err != nil {
+			return classify(err)
+		}
+		if !status.Affected && !force {
+			return codedError{1, fmt.Errorf("service %s is not affected; use --force to create a release anyway", args[0])}
 		}
 		var next version.Version
 		if explicit != "" {
@@ -335,6 +342,7 @@ func (a *app) releaseCommand() *cobra.Command {
 	c.Flags().StringVar(&explicit, "version", "", "explicit semantic version")
 	c.Flags().BoolVar(&dry, "dry-run", false, "show without creating the tag")
 	c.Flags().BoolVar(&push, "push", false, "push the tag to the configured remote")
+	c.Flags().BoolVar(&force, "force", false, "release even if the service is not affected")
 	return c
 }
 

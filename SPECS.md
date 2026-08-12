@@ -727,6 +727,16 @@ scraper-service/v0.1.6
 
 sul commit corrente.
 
+Il comando deve verificare lo stato affected del servizio prima del dry-run o della creazione del tag. Se il servizio non è affected deve terminare con exit code `1` e un errore, senza creare alcun tag.
+
+Per consentire esplicitamente una release priva di modifiche rilevanti, supportare:
+
+```bash
+releaser release scraper-service patch --force
+```
+
+`--force` ignora esclusivamente il controllo affected; restano valide tutte le altre verifiche, inclusi versione, unicità del tag e working tree pulita.
+
 ---
 
 # 24. Release con versione esplicita

@@ -141,6 +141,12 @@ releaser release api major
 
 Il tag risultante ha forma `api/v2.4.2` e messaggio `Release api v2.4.2`. La working tree deve essere pulita.
 
+Il servizio deve essere affected, cioè deve avere modifiche rilevanti successive alla sua ultima release. In caso contrario il comando termina con un errore. Per creare intenzionalmente un tag anche senza modifiche del servizio, usa `--force`:
+
+```sh
+releaser release api patch --force
+```
+
 Per vedere il risultato senza creare il tag:
 
 ```sh
@@ -188,8 +194,8 @@ releaser version-tag <service>
 releaser next-version-number <service> <patch|minor|major>
 releaser next-version-tag <service> <patch|minor|major>
 releaser plan [--format table|json]
-releaser release <service> <patch|minor|major> [--dry-run] [--push]
-releaser release <service> --version <semver> [--dry-run] [--push]
+releaser release <service> <patch|minor|major> [--dry-run] [--push] [--force]
+releaser release <service> --version <semver> [--dry-run] [--push] [--force]
 ```
 
 Usa `releaser --help` o `releaser <comando> --help` per l'help integrato.
