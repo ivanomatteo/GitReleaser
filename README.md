@@ -255,6 +255,18 @@ Per il bootstrap di un servizio senza tag, o per impostare una versione precisa,
 releaser release new-service --version 1.0.0
 ```
 
+Per inizializzare in una sola operazione tutti i servizi configurati che non hanno ancora un tag valido, usa `--new`:
+
+```sh
+releaser release --new
+# crea <service>/v0.1.0 per ogni servizio mai rilasciato
+
+releaser release --new --version 1.0.0
+# usa 1.0.0 come versione iniziale
+```
+
+I servizi che hanno già almeno un tag valido secondo lo schema `<service>/v<semver>` vengono ignorati. Se `--version` non è specificato, la versione iniziale predefinita è `0.1.0`. `--new` non accetta un nome di servizio o un bump e non può essere combinato con `--affected`, `--all`, `--root` o `--force`; supporta invece `--dry-run` e `--push`.
+
 `--version` e un bump non possono essere usati insieme. Il parsing è strict: valori come `1.2`, `v1.2.3` e `01.2.3` non sono accettati.
 
 Il tag rimane locale salvo richiesta esplicita:

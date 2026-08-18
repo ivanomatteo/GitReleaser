@@ -8,6 +8,81 @@ import (
 	"testing"
 )
 
+func TestReleaseNewCreatesOnlyMissingInitialTags(t *testing.T) {
+	repo := t.TempDir()
+	configPath := filepath.Join(repo, "releaser.yml")
+	write := func(name, contents string) {
+		t.Helper()
+		path := filepath.Join(repo, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+
+	git("init")
+	git("config", "user.name", "Test")
+	git("config", "user.email", "test@example.com")
+	write("releaser.yml", "services:\n  api:\n    paths: [services/api]\n  web:\n    paths: [services/web]\n  worker:\n    paths: [services/worker]\n")
+	write("services/api/main.go", "package api\n")
+	write("services/web/main.go", "package web\n")
+	write("services/worker/main.go", "package worker\n")
+	git("add", ".")
+	git("commit", "-m", "initial")
+	git("tag", "-a", "api/v1.2.3", "-m", "Release api v1.2.3")
+
+	cmd := New()
+	cmd.SetArgs([]string{"--config", configPath, "--repo", repo, "release", "--new"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("default initial release failed: %v", err)
+	}
+	if got := git("tag", "--list", "*/v*", "--sort=refname"); got != "api/v1.2.3\nweb/v0.1.0\nworker/v0.1.0" {
+		t.Fatalf("unexpected tags:\n%s", got)
+	}
+
+	// The command is idempotent when every configured service has a release.
+	cmd = New()
+	cmd.SetArgs([]string{"--config", configPath, "--repo", repo, "release", "--new", "--version", "2.0.0"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("idempotent initial release failed: %v", err)
+	}
+	if got := git("tag", "--list", "*/v2.0.0"); got != "" {
+		t.Fatalf("existing services were retagged: %s", got)
+	}
+}
+
+func TestReleaseNewValidatesArgumentsAndVersion(t *testing.T) {
+	repo, _ := rootTestRepo(t)
+	configPath := filepath.Join(repo, "releaser.yml")
+	if err := os.WriteFile(configPath, []byte("services:\n  api:\n    paths: [main.go]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, args := range [][]string{
+		{"release", "--new", "api"},
+		{"release", "--new", "--force"},
+		{"release", "--new", "--version", "v1.0.0"},
+	} {
+		cmd := New()
+		cmd.SetArgs(append([]string{"--config", configPath, "--repo", repo}, args...))
+		if err := cmd.Execute(); err == nil {
+			t.Fatalf("expected error for %v", args)
+		}
+	}
+}
+
 func TestBulkRelease(t *testing.T) {
 	repo := t.TempDir()
 	configPath := filepath.Join(repo, "releaser.yml")

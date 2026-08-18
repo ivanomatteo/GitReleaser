@@ -269,9 +269,12 @@ func (a *app) planCommand() *cobra.Command {
 func (a *app) releaseCommand() *cobra.Command {
 	var explicit string
 	var prefix string
-	var dry, push, force, affected, all, root bool
-	c := &cobra.Command{Use: "release <service> [patch|minor|major] | release (--affected|--all|--root) <patch|minor|major>", Args: cobra.MaximumNArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+	var dry, push, force, affected, all, root, newRelease bool
+	c := &cobra.Command{Use: "release <service> [patch|minor|major] | release (--affected|--all|--root) <patch|minor|major> | release --new [--version <semver>]", Args: cobra.MaximumNArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
 		if root {
+			if newRelease {
+				return codedError{1, errors.New("--new cannot be used with --root")}
+			}
 			return a.releaseRoot(cmd, args, explicit, prefix, dry, push, force, affected, all)
 		}
 		if cmd.Flags().Changed("prefix") {
@@ -281,14 +284,17 @@ func (a *app) releaseCommand() *cobra.Command {
 		if err != nil {
 			return err
 		}
+		if newRelease && (affected || all || force || len(args) != 0) {
+			return codedError{1, errors.New("--new cannot be used with service, bump, --affected, --all, or --force")}
+		}
 		if affected && all {
 			return codedError{1, errors.New("use either --affected or --all, not both")}
 		}
-		bulk := affected || all
+		bulk := affected || all || newRelease
 		if all && !force {
 			return codedError{1, errors.New("--all requires --force")}
 		}
-		if bulk && (len(args) != 1 || explicit != "") {
+		if !newRelease && bulk && (len(args) != 1 || explicit != "") {
 			return codedError{1, errors.New("bulk release requires exactly one patch, minor, or major bump")}
 		}
 		if !bulk && explicit != "" && len(args) == 2 {
@@ -297,7 +303,23 @@ func (a *app) releaseCommand() *cobra.Command {
 
 		names := []string{}
 		bump := ""
-		if bulk {
+		if newRelease {
+			if explicit == "" {
+				explicit = "0.1.0"
+			}
+			if _, err = version.Parse(explicit); err != nil {
+				return codedError{1, err}
+			}
+			for _, name := range e.Names() {
+				current, latestErr := e.Latest(name)
+				if latestErr != nil {
+					return classify(latestErr)
+				}
+				if current == nil {
+					names = append(names, name)
+				}
+			}
+		} else if bulk {
 			bump = args[0]
 			if bump != "patch" && bump != "minor" && bump != "major" {
 				return codedError{1, fmt.Errorf("invalid bump %q: expected patch, minor, or major", bump)}
@@ -404,6 +426,7 @@ func (a *app) releaseCommand() *cobra.Command {
 	c.Flags().BoolVar(&affected, "affected", false, "release all affected services")
 	c.Flags().BoolVar(&all, "all", false, "release all services (requires --force)")
 	c.Flags().BoolVar(&root, "root", false, "release the repository as a single project (no configuration required)")
+	c.Flags().BoolVar(&newRelease, "new", false, "create the first tag for every unreleased service")
 	c.Flags().StringVar(&prefix, "prefix", "", "tag prefix for a root release (empty means tags such as v1.2.3)")
 	return c
 }

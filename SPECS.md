@@ -89,6 +89,29 @@ Il tool non deve determinare automaticamente il tipo di bump.
 
 La scelta tra `patch`, `minor` e `major` rimane responsabilità dell’utente o della pipeline di release.
 
+Per la prima release massiva dei servizi, il comando:
+
+```text
+releaser release --new [--version <semver>]
+```
+
+deve creare su `HEAD` il primo tag di ogni servizio configurato che non possiede ancora un tag valido nel proprio namespace. La versione predefinita, quando `--version` non è presente, è `0.1.0`.
+
+Esempio:
+
+```text
+releaser release --new --version 0.1.0
+```
+
+Con i servizi `api`, `worker` e `web`, se soltanto `api` possiede già un tag valido, devono essere creati:
+
+```text
+worker/v0.1.0
+web/v0.1.0
+```
+
+`api` deve essere ignorato indipendentemente dalla versione del suo tag esistente. Il comando deve essere idempotente: se tutti i servizi hanno già una release valida, non crea tag. `--new` non può essere combinato con un servizio, un bump, `--affected`, `--all`, `--root` o `--force`; può essere usato con `--dry-run` e `--push`.
+
 ---
 
 # 4. Libreria SemVer Go
