@@ -1,12 +1,40 @@
 package cli
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestGetVar(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "releaser.yml")
+	contents := "services:\n  api:\n    paths: [services/api]\n    vars:\n      image: registry.example/api:latest\n      empty: \"\"\n"
+	if err := os.WriteFile(configPath, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	a := &app{configPath: configPath, out: &out}
+	cmd := a.getVarCommand()
+	cmd.SetArgs([]string{"api", "image"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "registry.example/api:latest\n" {
+		t.Fatalf("unexpected output %q", got)
+	}
+
+	for _, args := range [][]string{{"missing", "image"}, {"api", "missing"}} {
+		cmd = a.getVarCommand()
+		cmd.SetArgs(args)
+		if err := cmd.Execute(); err == nil {
+			t.Fatalf("expected an error for %v", args)
+		}
+	}
+}
 
 func TestReleaseNewCreatesOnlyMissingInitialTags(t *testing.T) {
 	repo := t.TempDir()

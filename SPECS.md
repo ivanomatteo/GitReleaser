@@ -212,6 +212,9 @@ services:
     dependencies:
       - common/auth
       - common/logging
+    vars:
+      image: registry.example.com/project/api
+      deployment: api-production
 
   worker:
     paths:
@@ -233,7 +236,10 @@ Ogni servizio può avere:
 paths
 dependencies
 ignore
+vars
 ```
+
+`vars` è una mappa opzionale di chiavi e valori stringa specifica del servizio. I valori non stringa non sono validi.
 
 ---
 
@@ -404,6 +410,32 @@ Esempio:
 ```bash
 VERSION=$(releaser version-number scraper-service)
 ```
+
+---
+
+# 11.1 Comando `get-var`
+
+Sintassi:
+
+```bash
+releaser get-var <service> <key>
+```
+
+Il comando legge il valore dalla sezione `vars` del servizio e lo scrive da solo su `stdout`, con newline finale consentita. Non richiede che la directory indicata da `--repo` sia un repository Git.
+
+Esempio:
+
+```bash
+releaser get-var api image
+```
+
+Output:
+
+```text
+registry.example.com/project/api
+```
+
+Servizio o chiave inesistenti producono un errore e un exit code non zero. Il comando è side-effect free ed è adatto a script e pipeline.
 
 ---
 
@@ -1211,6 +1243,7 @@ Comandi previsti:
 releaser status
 releaser affected
 releaser changes
+releaser get-var
 
 releaser version-number
 releaser version-tag

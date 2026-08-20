@@ -131,6 +131,9 @@ services:
       - common/logging
     ignore:
       - services/api/docs/**
+    vars:
+      image: registry.example.com/project/api
+      deployment: api-production
 
   worker:
     paths:
@@ -139,13 +142,24 @@ services:
       - common/logging
 ```
 
-`paths` identifica il codice del servizio, `dependencies` aggiunge directory condivise che possono renderlo affected e `ignore` esclude glob specifici. L'`ignore` alla radice vale per tutti i servizi. `remote` è usato solo da `release --push` e, se omesso, vale `origin`.
+`paths` identifica il codice del servizio, `dependencies` aggiunge directory condivise che possono renderlo affected, `ignore` esclude glob specifici e `vars` contiene valori stringa chiave-valore specifici del servizio. L'`ignore` alla radice vale per tutti i servizi. `remote` è usato solo da `release --push` e, se omesso, vale `origin`.
 
 Verifica la configurazione con:
 
 ```sh
 releaser config check
 ```
+
+Le variabili sono recuperabili senza accedere a Git e il comando stampa esclusivamente il valore, così da poterlo usare negli script:
+
+```sh
+releaser get-var api image
+# registry.example.com/project/api
+
+IMAGE=$(releaser get-var api image)
+```
+
+Il comando fallisce se il servizio o la chiave non esistono. I valori di `vars` devono essere stringhe; numeri e booleani vanno quindi racchiusi tra virgolette.
 
 ## Comandi di versione
 
@@ -331,6 +345,7 @@ releaser config check
 releaser status [service] [--verbose]
 releaser affected
 releaser changes <service>
+releaser get-var <service> <key>
 releaser version-number <service>
 releaser version-tag <service>
 releaser next-version-number <service> <patch|minor|major>

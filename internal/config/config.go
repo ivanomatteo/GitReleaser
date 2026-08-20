@@ -11,9 +11,28 @@ import (
 )
 
 type Service struct {
-	Paths        []string `yaml:"paths"`
-	Dependencies []string `yaml:"dependencies"`
-	Ignore       []string `yaml:"ignore"`
+	Paths        []string   `yaml:"paths"`
+	Dependencies []string   `yaml:"dependencies"`
+	Ignore       []string   `yaml:"ignore"`
+	Vars         StringVars `yaml:"vars"`
+}
+
+type StringVars map[string]string
+
+func (v *StringVars) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("vars must be a mapping of string keys to string values")
+	}
+	result := make(StringVars, len(node.Content)/2)
+	for i := 0; i < len(node.Content); i += 2 {
+		key, value := node.Content[i], node.Content[i+1]
+		if key.Tag != "!!str" || value.Tag != "!!str" {
+			return fmt.Errorf("vars keys and values must be strings")
+		}
+		result[key.Value] = value.Value
+	}
+	*v = result
+	return nil
 }
 
 type Config struct {

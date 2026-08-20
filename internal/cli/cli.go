@@ -52,8 +52,27 @@ func New() *cobra.Command {
 	r.PersistentFlags().StringVarP(&a.configPath, "config", "c", "releaser.yml", "configuration file")
 	r.PersistentFlags().StringVar(&a.repo, "repo", ".", "Git repository directory")
 	r.AddCommand(a.versionCommand("version-number", false, false), a.versionCommand("version-tag", true, false), a.versionCommand("next-version-number", false, true), a.versionCommand("next-version-tag", true, true))
-	r.AddCommand(a.statusCommand(), a.affectedCommand(), a.changesCommand(), a.planCommand(), a.releaseCommand(), a.configCommand())
+	r.AddCommand(a.statusCommand(), a.affectedCommand(), a.changesCommand(), a.getVarCommand(), a.planCommand(), a.releaseCommand(), a.configCommand())
 	return r
+}
+
+func (a *app) getVarCommand() *cobra.Command {
+	return &cobra.Command{Use: "get-var <service> <key>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := config.Load(a.configPath)
+		if err != nil {
+			return codedError{2, err}
+		}
+		svc, ok := cfg.Services[args[0]]
+		if !ok {
+			return fmt.Errorf("unknown service %q", args[0])
+		}
+		value, ok := svc.Vars[args[1]]
+		if !ok {
+			return fmt.Errorf("unknown variable %q for service %q", args[1], args[0])
+		}
+		fmt.Fprintln(a.out, value)
+		return nil
+	}}
 }
 
 func (a *app) engine(verbose bool) (service.Engine, error) {
