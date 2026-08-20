@@ -103,7 +103,7 @@ Sono richiesti Go 1.22 o successivo e Git disponibile nel `PATH`.
 I binari precompilati per Linux, macOS e Windows sono disponibili nella [release più recente su GitHub](https://github.com/ivanomatteo/GitReleaser/releases/latest).
 
 ```sh
-go build -o releaser ./cmd/releaser
+CGO_ENABLED=0 go build -o releaser ./cmd/releaser
 ```
 
 Tutti i comandi operano sul repository corrente e leggono `releaser.yml`. Le opzioni globali permettono di cambiare entrambi:
