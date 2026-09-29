@@ -26,8 +26,7 @@ type codedError struct {
 func (e codedError) Error() string { return e.err.Error() }
 func (e codedError) Unwrap() error { return e.err }
 func ExitCode(err error) int {
-	var e codedError
-	if errors.As(err, &e) {
+	if e, ok := errors.AsType[codedError](err); ok {
 		return e.code
 	}
 	if errors.Is(err, gitclient.ErrIncompleteHistory) {

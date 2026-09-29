@@ -98,7 +98,7 @@ I tag rappresentano invece le release delle singole unità deployabili.
 
 ## Requisiti e build
 
-Sono richiesti Go 1.22 o successivo e Git disponibile nel `PATH`.
+Sono richiesti Go 1.27 o successivo e Git disponibile nel `PATH`.
 
 I binari precompilati per Linux, macOS e Windows sono disponibili nella [release più recente su GitHub](https://github.com/ivanomatteo/GitReleaser/releases/latest).
 

@@ -64,7 +64,7 @@ func (g Client) DiffFiles(from, to string) ([]ChangedFile, error) {
 		return nil, nil
 	}
 	var files []ChangedFile
-	for _, line := range strings.Split(o, "\n") {
+	for line := range strings.SplitSeq(o, "\n") {
 		f := strings.Split(line, "\t")
 		if len(f) < 2 {
 			return nil, fmt.Errorf("unexpected git diff output %q", line)
