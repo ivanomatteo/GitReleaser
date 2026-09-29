@@ -1,8 +1,10 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,7 +49,9 @@ func Load(path string) (Config, error) {
 		return Config{}, fmt.Errorf("read config %s: %w", path, err)
 	}
 	var c Config
-	if err := yaml.Unmarshal(b, &c); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(b))
+	dec.KnownFields(true)
+	if err := dec.Decode(&c); err != nil && !errors.Is(err, io.EOF) {
 		return Config{}, fmt.Errorf("parse config %s: %w", path, err)
 	}
 	if c.Remote == "" {
@@ -64,8 +68,8 @@ func (c Config) Validate() error {
 		return errors.New("configuration contains no services")
 	}
 	for name, svc := range c.Services {
-		if strings.TrimSpace(name) == "" || strings.Contains(name, "/") {
-			return fmt.Errorf("invalid service name %q", name)
+		if err := validServiceName(name); err != nil {
+			return err
 		}
 		if len(svc.Paths) == 0 {
 			return fmt.Errorf("service %s has no paths", name)
@@ -75,6 +79,25 @@ func (c Config) Validate() error {
 				return fmt.Errorf("service %s: %w", name, err)
 			}
 		}
+	}
+	return nil
+}
+
+// validServiceName accepts only names usable as a single Git ref component,
+// so that <service>/v<semver> is always a valid tag (see git check-ref-format).
+func validServiceName(name string) error {
+	invalid := name == "" || name == "@" ||
+		strings.HasPrefix(name, ".") || strings.HasPrefix(name, "-") ||
+		strings.HasSuffix(name, ".") || strings.HasSuffix(name, ".lock") ||
+		strings.Contains(name, "..") || strings.Contains(name, "@{") ||
+		strings.ContainsAny(name, "/\\ ~^:?*[")
+	for _, r := range name {
+		if r < 0x20 || r == 0x7f {
+			invalid = true
+		}
+	}
+	if invalid {
+		return fmt.Errorf("invalid service name %q", name)
 	}
 	return nil
 }

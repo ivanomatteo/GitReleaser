@@ -20,3 +20,16 @@ func TestStrictParsingAndBumps(t *testing.T) {
 		}
 	}
 }
+
+func TestPrereleaseOrderingAndBumps(t *testing.T) {
+	rc, _ := Parse("2.1.0-rc.1")
+	final, _ := Parse("2.1.0")
+	if Compare(rc, final) >= 0 {
+		t.Fatal("a prerelease must precede its final version")
+	}
+	for bump, want := range map[string]string{"patch": "2.1.0", "minor": "2.2.0", "major": "3.0.0"} {
+		if got, _ := rc.Bump(bump); got.String() != want {
+			t.Errorf("2.1.0-rc.1 + %s = %s, want %s", bump, got, want)
+		}
+	}
+}

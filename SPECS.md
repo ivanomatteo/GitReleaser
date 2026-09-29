@@ -204,6 +204,11 @@ releaser.yml
 Esempio:
 
 ```yaml
+remote: origin
+
+ignore:
+  - docs/**
+
 services:
 
   api:
@@ -230,16 +235,21 @@ services:
       - common/logging
 ```
 
-Ogni servizio può avere:
+Ogni servizio deve avere `paths` e può avere:
 
 ```text
-paths
 dependencies
 ignore
 vars
 ```
 
 `vars` è una mappa opzionale di chiavi e valori stringa specifica del servizio. I valori non stringa non sono validi.
+
+A livello radice sono ammessi `services`, `ignore` (sezione 31) e `remote`, il remote usato da `--push` (predefinito `origin`, sezione 28). Le chiavi sconosciute sono un errore di configurazione, così che un refuso non disattivi silenziosamente una dipendenza.
+
+Il nome di un servizio deve essere utilizzabile come singolo componente di un ref Git: non può essere vuoto, contenere `/`, spazi, caratteri di controllo, `~ ^ : ? * [ \`, `..` o `@{`, iniziare con `.` o `-`, terminare con `.` o `.lock`.
+
+Il file predefinito è cercato nella directory indicata da `--repo`. Un `--config` relativo passato esplicitamente è risolto rispetto alla directory corrente.
 
 ---
 
@@ -362,6 +372,18 @@ api/1.2.3
 api/v01.2.3
 api/foo
 ```
+
+Sono validi anche prerelease e build metadata secondo SemVer 2.0.0, per esempio `api/v2.1.0-rc.1` o `api/v1.0.0+build.5`.
+
+Le prerelease partecipano all'ordinamento SemVer: `2.1.0-rc.1` precede `2.1.0` ma segue `2.0.0`. Se è la versione più alta, una prerelease è l'ultima release del servizio e viene restituita da `version-number` e `version-tag`. Il bump da una prerelease segue la libreria SemVer:
+
+```text
+2.1.0-rc.1 + patch -> 2.1.0
+2.1.0-rc.1 + minor -> 2.2.0
+2.1.0-rc.1 + major -> 3.0.0
+```
+
+Il build metadata non influisce sull'ordinamento: `1.0.0+a` e `1.0.0` hanno la stessa precedenza.
 
 I tag malformati possono essere ignorati normalmente e segnalati con warning in modalità verbose.
 
@@ -541,7 +563,7 @@ Non deve esistere il comando generico:
 releaser next
 ```
 
-La CLI deve esporre esclusivamente:
+Per ottenere versioni e tag la CLI deve esporre esclusivamente:
 
 ```text
 version-number
@@ -550,7 +572,7 @@ next-version-number
 next-version-tag
 ```
 
-Questo evita ambiguità sul formato restituito.
+Questo evita ambiguità sul formato restituito. L'elenco completo dei comandi è nella sezione 42.
 
 ---
 
@@ -790,7 +812,7 @@ Per consentire esplicitamente una release priva di modifiche rilevanti, supporta
 releaser release scraper-service patch --force
 ```
 
-`--force` ignora esclusivamente il controllo affected; restano valide tutte le altre verifiche, inclusi versione, unicità del tag e working tree pulita.
+`--force` ignora esclusivamente il controllo affected e quello sulla versione esplicita non maggiore dell'ultima (sezione 24); restano valide tutte le altre verifiche, inclusi validità della versione, unicità del tag e working tree pulita.
 
 ## 23.1 Release in blocco
 
@@ -806,9 +828,9 @@ Per rilasciare tutti i servizi configurati, anche se non affected:
 releaser release --all --force <patch|minor|major>
 ```
 
-`--affected` e `--all` sono mutuamente esclusivi. `--all` richiede sempre `--force`, così il superamento del controllo affected rimane esplicito. La modalità bulk non supporta `--version`: ciascun servizio deve avere una release precedente dalla quale calcolare il bump.
+`--affected` e `--all` sono mutuamente esclusivi. `--all` richiede sempre `--force`, così il superamento del controllo affected rimane esplicito. Le modalità `--affected` e `--all` non supportano `--version`: ciascun servizio deve avere una release precedente dalla quale calcolare il bump. L'unica modalità bulk che accetta `--version` è `--new` (sezione 3), che riguarda solo servizi mai rilasciati.
 
-Prima di creare il primo tag, il comando deve validare l'intero batch: configurazione dei servizi, stato della history, bump, presenza di una release precedente, unicità di tutti i nuovi tag e working tree pulita. Un errore di validazione non deve quindi lasciare tag parziali. L'ordine di elaborazione è quello alfabetico dei servizi. `--dry-run` deve mostrare tutti i tag senza modificarli; `--push` deve pubblicare ogni tag creato sul remote configurato.
+Prima di creare il primo tag, il comando deve validare l'intero batch: configurazione dei servizi, stato della history, bump, presenza di una release precedente, unicità di tutti i nuovi tag e working tree pulita. Un errore di validazione non deve quindi lasciare tag parziali. L'ordine di elaborazione è quello alfabetico dei servizi. `--dry-run` deve mostrare tutti i tag senza modificarli; `--push` deve pubblicare tutti i tag creati sul remote configurato con un unico push atomico (`git push --atomic`). Se la creazione di un tag o il push falliscono, i tag locali creati dal comando devono essere eliminati: il comando non lascia release parziali né in locale né sul remote e può essere rilanciato.
 
 ## 23.2 Release della root di un repository standard
 
@@ -819,9 +841,9 @@ releaser release --root <patch|minor|major> [--dry-run] [--push]
 releaser release --root --version <Initial SemVer> [--dry-run] [--push]
 ```
 
-Il tag ha forma `<prefix>v<semver>`. Il prefix predefinito viene dedotto dai tag release precedenti; in assenza di release è vuoto e produce, per esempio, `v0.1.5`. `--prefix=''` richiede esplicitamente un prefix vuoto. Se i tag release individuati hanno prefix eterogenei, il comando deve fallire e rendere obbligatorio `--prefix`.
+Il tag ha forma `<prefix>v<semver>`. Il prefix predefinito viene dedotto dai tag release precedenti; nella deduzione un prefix è valido solo se vuoto o se termina con un separatore (`/`, `-`, `_`, `.`), così che tag come `dev1.0.0` non siano interpretati come release con prefix `de`. In assenza di release il prefix è vuoto e produce, per esempio, `v0.1.5`. `--prefix=''` richiede esplicitamente un prefix vuoto. Se i tag release individuati hanno prefix eterogenei, il comando deve fallire e rendere obbligatorio `--prefix`.
 
-Il bump richiede una release precedente; il bootstrap usa `--version` e una SemVer strict. Se non esistono modifiche tra il tag precedente selezionato e `HEAD`, il comando fallisce salvo uso esplicito di `--force`. Restano obbligatorie l'ascendenza del tag, l'unicità del nuovo tag e la working tree pulita. `--dry-run` non crea tag; `--push` pubblica il tag su `origin`.
+Il bump richiede una release precedente; il bootstrap usa `--version` e una SemVer strict. Come nella sezione 24, una `--version` non maggiore dell'ultima release richiede `--force`. Se non esistono modifiche tra il tag precedente selezionato e `HEAD`, il comando fallisce salvo uso esplicito di `--force`. Restano obbligatorie l'ascendenza del tag, l'unicità del nuovo tag e la working tree pulita. `--dry-run` non crea tag; `--push` pubblica il tag su `origin`.
 
 `--root`, `--affected` e `--all` sono modalità mutuamente esclusive.
 
@@ -839,10 +861,11 @@ Serve principalmente per:
 
 * bootstrap;
 * migrazione di repository esistenti;
-* reset controllati;
 * casi amministrativi.
 
 La versione esplicita deve essere validata tramite SemVer strict.
+
+Se il servizio ha già una release, la versione esplicita deve essere strettamente maggiore dell'ultima; altrimenti il comando fallisce con exit code `1`. Con `--force` il tag viene creato comunque (per esempio per ricostruire un tag mancante nella history), ma non diventa l'ultima release, perché questa è sempre la versione SemVer più alta: non è quindi possibile un "reset" verso una versione inferiore.
 
 ---
 
@@ -854,14 +877,24 @@ Servizio senza tag:
 new-service
 ```
 
-Status:
+`status new-service --verbose`, con lo stesso formato della sezione 19:
 
 ```text
 Service: new-service
-Last version: none
-Status: UNRELEASED
-Affected: yes
+
+Last version:
+  none
+
+Last tag:
+  none
+
+Changed files:
+
+Affected:
+  yes
 ```
+
+Nella tabella di `status` e `plan` la versione compare come `none`; in `plan --format json` `lastVersion` e `lastTag` sono `null`.
 
 Prima release:
 
@@ -940,7 +973,7 @@ Remote predefinito:
 origin
 ```
 
-Configurabile.
+Configurabile tramite la chiave `remote` di `releaser.yml` (sezione 6). `release --root` non legge la configurazione e usa sempre `origin`.
 
 Il tool non deve fare push implicito senza flag.
 
@@ -1021,6 +1054,14 @@ services:
       - services/api/docs/**
 ```
 
+I pattern sono relativi alla root del repository e supportano:
+
+* `**`: qualsiasi numero di directory, anche nessuna;
+* `*`: qualsiasi sequenza di caratteri all'interno di un segmento di path;
+* `?`: un singolo carattere all'interno di un segmento di path.
+
+Tutti gli altri caratteri, incluse le parentesi quadre, sono letterali. L'ignore globale e quello del servizio si sommano.
+
 ---
 
 # 32. Rename e delete
@@ -1034,7 +1075,9 @@ Il detector deve gestire:
 
 Un file eliminato può rendere affected il servizio.
 
-Per un rename devono essere valutati sia path precedente sia path nuovo.
+Per un rename devono essere valutati sia path precedente sia path nuovo. Ciascun path è rilevante se appartiene a `paths` o `dependencies` del servizio e non è ignorato; il servizio è affected se almeno uno dei due è rilevante, e `changes` riporta soltanto i path rilevanti.
+
+I path devono essere letti in modo non ambiguo (per esempio `git diff-tree -z`), così che nomi con caratteri non ASCII, spazi o virgolette non vengano alterati dal quoting di Git.
 
 ---
 
@@ -1067,7 +1110,7 @@ Il comando:
 release
 ```
 
-deve richiedere working tree pulito.
+deve richiedere working tree pulito: nessuna modifica, staged o no, ai file tracciati. I file non tracciati non bloccano la release, perché non possono far parte del tag creato su `HEAD` (per esempio artefatti scaricati in CI).
 
 ---
 
@@ -1084,6 +1127,8 @@ Questo è fondamentale per CI/CD.
 Se la history necessaria non è disponibile, il tool deve fallire esplicitamente.
 
 Non deve produrre silenziosamente un risultato `affected` potenzialmente errato.
+
+In particolare, se in una shallow clone un tag non risulta antenato di `HEAD`, l'errore deve indicare la history mancante (exit code `3`) e non un tag divergente.
 
 ---
 
@@ -1106,15 +1151,15 @@ La pipeline è responsabile di fornire history e tag sufficienti.
 
 # 37. Exit code
 
-Proposta:
-
 ```text
 0 = successo
 1 = validazione negativa / stato non disponibile
 2 = errore configurazione
 3 = errore Git
-4 = errore interno
+4 = errore interno (riservato, attualmente non utilizzato)
 ```
+
+Rientrano nel codice `1` anche argomenti o flag CLI non validi, servizio sconosciuto, variabile sconosciuta, bump non valido e servizio senza release. Rientrano nel codice `2` file di configurazione mancante, YAML non valido, chiavi sconosciute e nomi o path non validi. Rientrano nel codice `3` repository non valido, history incompleta e comandi Git falliti, incluso il push.
 
 ---
 
@@ -1158,7 +1203,7 @@ cmd/
 internal/
 ├── config/
 ├── git/
-├── semver/
+├── version/
 ├── service/
 ├── changes/
 ├── release/
@@ -1167,13 +1212,15 @@ internal/
 
 ---
 
-# 40. Package `semver`
+# 40. Package `version`
 
 Il package interno:
 
 ```text
-internal/semver
+internal/version
 ```
+
+(chiamato `version` e non `semver` per non confondersi con la libreria che incapsula)
 
 deve fare da wrapper alla libreria:
 
@@ -1225,9 +1272,13 @@ type Git interface {
 
     IsClean() (bool, error)
 
+    IsShallow() (bool, error)
+
     CreateTag(tag, commit, message string) error
 
-    PushTag(remote, tag string) error
+    DeleteTag(tag string) error
+
+    PushTags(remote string, tags ...string) error // push atomico
 }
 ```
 

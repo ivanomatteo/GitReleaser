@@ -113,6 +113,8 @@ Tutti i comandi operano sul repository corrente e leggono `releaser.yml`. Le opz
     --repo string     directory del repository Git (default ".")
 ```
 
+Il `releaser.yml` predefinito viene cercato nella directory indicata da `--repo`, quindi `releaser --repo ../monorepo status` funziona da qualsiasi directory. Un `--config` relativo passato esplicitamente è invece risolto rispetto alla directory corrente.
+
 ## Configurazione
 
 ```yaml
@@ -143,6 +145,10 @@ services:
 ```
 
 `paths` identifica il codice del servizio, `dependencies` aggiunge directory condivise che possono renderlo affected, `ignore` esclude glob specifici e `vars` contiene valori stringa chiave-valore specifici del servizio. L'`ignore` alla radice vale per tutti i servizi. `remote` è usato solo da `release --push` e, se omesso, vale `origin`.
+
+`paths` è obbligatorio, gli altri campi sono facoltativi. Le chiavi sconosciute (per esempio un refuso come `dependecies`) sono un errore di configurazione. I nomi dei servizi devono essere validi come componente di un tag Git: niente `/`, spazi, `~ ^ : ? * [ \`, `..` o `@{`, e non possono iniziare con `.` o `-` né terminare con `.` o `.lock`.
+
+I glob di `ignore` supportano `**` (qualsiasi numero di directory), `*` e `?` (all'interno di un singolo segmento di path); gli altri caratteri sono letterali. Per un file rinominato vengono valutati sia il path precedente sia quello nuovo: il servizio è affected se almeno uno dei due appartiene ai suoi `paths`/`dependencies` e non è ignorato, e `changes` riporta solo i path rilevanti.
 
 Verifica la configurazione con:
 
@@ -249,7 +255,7 @@ releaser release api minor
 releaser release api major
 ```
 
-Il tag risultante ha forma `api/v2.4.2` e messaggio `Release api v2.4.2`. La working tree deve essere pulita.
+Il tag risultante ha forma `api/v2.4.2` e messaggio `Release api v2.4.2`. La working tree deve essere pulita: nessuna modifica ai file tracciati. I file non tracciati sono ignorati.
 
 Il servizio deve essere affected, cioè deve avere modifiche rilevanti successive alla sua ultima release. In caso contrario il comando termina con un errore. Per creare intenzionalmente un tag anche senza modifiche del servizio, usa `--force`:
 
@@ -281,7 +287,9 @@ releaser release --new --version 1.0.0
 
 I servizi che hanno già almeno un tag valido secondo lo schema `<service>/v<semver>` vengono ignorati. Se `--version` non è specificato, la versione iniziale predefinita è `0.1.0`. `--new` non accetta un nome di servizio o un bump e non può essere combinato con `--affected`, `--all`, `--root` o `--force`; supporta invece `--dry-run` e `--push`.
 
-`--version` e un bump non possono essere usati insieme. Il parsing è strict: valori come `1.2`, `v1.2.3` e `01.2.3` non sono accettati.
+`--version` e un bump non possono essere usati insieme. Il parsing è strict: valori come `1.2`, `v1.2.3` e `01.2.3` non sono accettati. Se il servizio ha già una release, la versione esplicita deve essere maggiore dell'ultima; con `--force` il tag viene creato comunque, ma non diventa l'ultima release, perché questa è sempre la SemVer più alta.
+
+Prerelease e build metadata sono tag validi (`api/v2.1.0-rc.1`, `api/v1.0.0+build.5`). Una prerelease partecipa all'ordinamento SemVer (`2.0.0` < `2.1.0-rc.1` < `2.1.0`), quindi può essere l'ultima release restituita da `version-number`. Da `2.1.0-rc.1` il bump `patch` produce `2.1.0`, `minor` produce `2.2.0` e `major` produce `3.0.0`.
 
 Il tag rimane locale salvo richiesta esplicita:
 
@@ -289,7 +297,7 @@ Il tag rimane locale salvo richiesta esplicita:
 releaser release api patch --push
 ```
 
-Con `--push`, il comando pubblica soltanto il nuovo tag sul remote configurato. Non vengono eseguiti fetch, pull, build o deploy impliciti.
+Con `--push`, il comando pubblica soltanto i nuovi tag sul remote configurato, con un unico push atomico: o arrivano tutti sul remote o nessuno. Se la creazione o il push falliscono, i tag locali creati dal comando vengono eliminati, così il comando può essere rilanciato. Non vengono eseguiti fetch, pull, build o deploy impliciti.
 
 ### Release in blocco
 
@@ -305,7 +313,7 @@ Per applicarlo a tutti i servizi configurati, inclusi quelli non affected, occor
 releaser release --all --force major
 ```
 
-Il comando valida l'intero batch prima di creare tag. Ogni servizio deve avere una release precedente, perché la versione esplicita non è supportata in modalità bulk. `--dry-run` e `--push` sono disponibili anche per le release in blocco; con `--push` ogni tag creato viene pubblicato sul remote configurato.
+Il comando valida l'intero batch prima di creare tag. Ogni servizio deve avere una release precedente, perché la versione esplicita non è supportata in modalità bulk. `--dry-run` e `--push` sono disponibili anche per le release in blocco; con `--push` tutti i tag creati vengono pubblicati sul remote configurato in un unico push atomico.
 
 ### Repository standard (root)
 
@@ -316,7 +324,7 @@ releaser release --root patch
 releaser release --root --version 1.0.0
 ```
 
-Il tag predefinito non ha prefix, per esempio `v0.1.5`. Se esiste già una release, il prefix viene dedotto dai tag precedenti; se vengono trovati prefix eterogenei, `--prefix` diventa obbligatorio. Un valore esplicitamente vuoto (`--prefix=''`) seleziona tag senza prefix:
+Il tag predefinito non ha prefix, per esempio `v0.1.5`. Se esiste già una release, il prefix viene dedotto dai tag precedenti; se vengono trovati prefix eterogenei, `--prefix` diventa obbligatorio. Nella deduzione un prefix è valido solo se vuoto o se termina con un separatore (`/`, `-`, `_`, `.`): `release-v1.0.0` ha prefix `release-`, mentre `dev1.0.0` non è considerato un tag di release. Un valore esplicitamente vuoto (`--prefix=''`) seleziona tag senza prefix:
 
 ```sh
 releaser release --root patch --prefix=''
@@ -336,7 +344,7 @@ Gli errori sono scritti su stderr con prefisso `ERROR:`. Gli exit code sono:
 | 2 | configurazione non leggibile o non valida |
 | 3 | repository, history o operazione Git non disponibile |
 
-In una shallow clone occorre rendere disponibili tag e history necessari prima di eseguire il tool; `releaser` non accede automaticamente alla rete.
+In una shallow clone occorre rendere disponibili tag e history necessari prima di eseguire il tool; `releaser` non accede automaticamente alla rete. Se la history tra un tag e `HEAD` manca, il comando fallisce con exit code 3 invece di riportare un risultato potenzialmente errato.
 
 ## Elenco rapido
 

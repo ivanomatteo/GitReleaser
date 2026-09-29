@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -41,8 +41,10 @@ type app struct {
 	root             *cobra.Command
 }
 
-func New() *cobra.Command {
-	a := &app{out: os.Stdout, err: os.Stderr, repo: "."}
+func New() *cobra.Command { return newApp(os.Stdout, os.Stderr) }
+
+func newApp(out, errOut io.Writer) *cobra.Command {
+	a := &app{out: out, err: errOut, repo: "."}
 	r := &cobra.Command{Use: "releaser", SilenceUsage: true, SilenceErrors: true, Short: "Release independent services in a monorepo"}
 	r.CompletionOptions.DisableDefaultCmd = true
 	r.SetOut(a.out)
@@ -55,11 +57,26 @@ func New() *cobra.Command {
 	return r
 }
 
+// loadConfig reads the configuration. The default relative path is resolved against
+// --repo, while a --config given explicitly is used as is (relative to the working directory).
+func (a *app) loadConfig() (config.Config, error) {
+	p := a.configPath
+	explicit := a.root != nil && a.root.PersistentFlags().Changed("config")
+	if !explicit && !filepath.IsAbs(p) {
+		p = filepath.Join(a.repo, p)
+	}
+	c, err := config.Load(p)
+	if err != nil {
+		return c, codedError{2, err}
+	}
+	return c, nil
+}
+
 func (a *app) getVarCommand() *cobra.Command {
 	return &cobra.Command{Use: "get-var <service> <key>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load(a.configPath)
+		cfg, err := a.loadConfig()
 		if err != nil {
-			return codedError{2, err}
+			return err
 		}
 		svc, ok := cfg.Services[args[0]]
 		if !ok {
@@ -75,9 +92,9 @@ func (a *app) getVarCommand() *cobra.Command {
 }
 
 func (a *app) engine(verbose bool) (service.Engine, error) {
-	c, err := config.Load(a.configPath)
+	c, err := a.loadConfig()
 	if err != nil {
-		return service.Engine{}, codedError{2, err}
+		return service.Engine{}, err
 	}
 	g := gitclient.Client{Dir: a.repo}
 	if err := g.CheckRepository(); err != nil {
@@ -319,6 +336,20 @@ func (a *app) releaseCommand() *cobra.Command {
 			return codedError{1, errors.New("use either a bump or --version, not both")}
 		}
 
+		// Statuses are computed once per service and reused by the validation below.
+		statuses := map[string]service.Status{}
+		status := func(name string) (service.Status, error) {
+			if st, ok := statuses[name]; ok {
+				return st, nil
+			}
+			st, err := e.Status(name)
+			if err != nil {
+				return st, classify(err)
+			}
+			statuses[name] = st
+			return st, nil
+		}
+
 		names := []string{}
 		bump := ""
 		if newRelease {
@@ -343,11 +374,11 @@ func (a *app) releaseCommand() *cobra.Command {
 				return codedError{1, fmt.Errorf("invalid bump %q: expected patch, minor, or major", bump)}
 			}
 			for _, name := range e.Names() {
-				status, statusErr := e.Status(name)
+				st, statusErr := status(name)
 				if statusErr != nil {
-					return classify(statusErr)
+					return statusErr
 				}
-				if all || status.Affected {
+				if all || st.Affected {
 					names = append(names, name)
 				}
 			}
@@ -355,36 +386,28 @@ func (a *app) releaseCommand() *cobra.Command {
 			if _, err = e.RequireService(args[0]); err != nil {
 				return err
 			}
-			names = append(names, args[0])
 			if len(args) == 2 {
 				bump = args[1]
+			} else if explicit == "" {
+				return codedError{1, errors.New("a bump or --version is required")}
 			}
+			names = append(names, args[0])
 		}
 
-		type releaseItem struct {
-			name, current, tag string
-			next               version.Version
-		}
-		items := make([]releaseItem, 0, len(names))
+		items := make([]releaseTag, 0, len(names))
 		for _, name := range names {
-			current, latestErr := e.Latest(name)
-			if latestErr != nil {
-				return classify(latestErr)
-			}
-			status, statusErr := e.Status(name)
+			st, statusErr := status(name)
 			if statusErr != nil {
-				return classify(statusErr)
+				return statusErr
 			}
-			if !status.Affected && !force {
+			if !st.Affected && !force {
 				return codedError{1, fmt.Errorf("service %s is not affected; use --force to create a release anyway", name)}
 			}
+			current := st.Release
 			var next version.Version
 			if explicit != "" {
 				next, err = version.Parse(explicit)
 			} else {
-				if bump == "" {
-					return codedError{1, errors.New("a bump or --version is required")}
-				}
 				if current == nil {
 					return unreleased(name)
 				}
@@ -392,6 +415,9 @@ func (a *app) releaseCommand() *cobra.Command {
 			}
 			if err != nil {
 				return codedError{1, err}
+			}
+			if err = checkExplicitVersion(explicit, next, current, force); err != nil {
+				return err
 			}
 			tag := name + "/v" + next.String()
 			tags, tagsErr := e.Git.Tags(tag)
@@ -405,7 +431,8 @@ func (a *app) releaseCommand() *cobra.Command {
 			if current != nil {
 				cur = current.Version.String()
 			}
-			items = append(items, releaseItem{name: name, current: cur, next: next, tag: tag})
+			items = append(items, releaseTag{name: name, current: cur, next: next, tag: tag,
+				message: fmt.Sprintf("Release %s v%s", name, next.String())})
 		}
 		if dry {
 			for i, item := range items {
@@ -414,33 +441,18 @@ func (a *app) releaseCommand() *cobra.Command {
 				}
 				fmt.Fprintf(a.out, "Service: %s\nCurrent version: %s\nNext version: %s\nTag: %s\n", item.name, item.current, item.next.String(), item.tag)
 			}
-			fmt.Fprintln(a.out, "\nNo changes have been made.")
+			if len(items) > 0 {
+				fmt.Fprintln(a.out)
+			}
+			fmt.Fprintln(a.out, "No changes have been made.")
 			return nil
 		}
-		clean, err := e.Git.IsClean()
-		if err != nil {
-			return classify(err)
-		}
-		if !clean {
-			return codedError{1, errors.New("working tree is not clean")}
-		}
-		for _, item := range items {
-			if err = e.Git.CreateTag(item.tag, "HEAD", fmt.Sprintf("Release %s v%s", item.name, item.next.String())); err != nil {
-				return classify(err)
-			}
-			if push {
-				if err = e.Git.PushTag(e.Config.Remote, item.tag); err != nil {
-					return classify(err)
-				}
-			}
-			fmt.Fprintln(a.out, item.tag)
-		}
-		return nil
+		return a.publish(e.Git, e.Config.Remote, items, push)
 	}}
 	c.Flags().StringVar(&explicit, "version", "", "explicit semantic version")
 	c.Flags().BoolVar(&dry, "dry-run", false, "show without creating the tag")
 	c.Flags().BoolVar(&push, "push", false, "push the tag to the configured remote")
-	c.Flags().BoolVar(&force, "force", false, "release even if the service is not affected")
+	c.Flags().BoolVar(&force, "force", false, "release even if not affected, or with a --version not greater than the current one")
 	c.Flags().BoolVar(&affected, "affected", false, "release all affected services")
 	c.Flags().BoolVar(&all, "all", false, "release all services (requires --force)")
 	c.Flags().BoolVar(&root, "root", false, "release the repository as a single project (no configuration required)")
@@ -449,7 +461,62 @@ func (a *app) releaseCommand() *cobra.Command {
 	return c
 }
 
-var rootTagPattern = regexp.MustCompile(`^(.*)v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:[-+].*)?$`)
+// checkExplicitVersion rejects an explicit --version that is not greater than the current
+// release unless --force is given: such a tag never becomes the latest release.
+func checkExplicitVersion(explicit string, next version.Version, current *service.Release, force bool) error {
+	if explicit == "" || current == nil || force || version.Compare(next, current.Version) > 0 {
+		return nil
+	}
+	return codedError{1, fmt.Errorf("version %s is not greater than the current version %s; use --force to create the tag anyway (it will not become the latest release)", next, current.Version)}
+}
+
+type releaseTag struct {
+	name, current, tag, message string
+	next                        version.Version
+}
+
+// publish creates every tag on HEAD and, when requested, pushes them atomically.
+// On failure the tags created by this run are deleted, so the command can simply be retried.
+func (a *app) publish(g gitclient.Client, remote string, items []releaseTag, push bool) error {
+	if len(items) == 0 {
+		return nil
+	}
+	clean, err := g.IsClean()
+	if err != nil {
+		return classify(err)
+	}
+	if !clean {
+		return codedError{1, errors.New("working tree is not clean")}
+	}
+	created := make([]string, 0, len(items))
+	rollback := func(cause error) error {
+		for _, t := range created {
+			if delErr := g.DeleteTag(t); delErr != nil {
+				fmt.Fprintf(a.err, "WARNING: could not delete local tag %s: %v\n", t, delErr)
+			}
+		}
+		return classify(cause)
+	}
+	for _, item := range items {
+		if err = g.CreateTag(item.tag, "HEAD", item.message); err != nil {
+			return rollback(err)
+		}
+		created = append(created, item.tag)
+	}
+	if push {
+		if err = g.PushTags(remote, created...); err != nil {
+			return rollback(err)
+		}
+	}
+	for _, t := range created {
+		fmt.Fprintln(a.out, t)
+	}
+	return nil
+}
+
+// A root release prefix is either empty or ends with a separator, so that tags such
+// as "dev1.0.0" are not mistaken for release "v1.0.0" with prefix "de".
+var rootTagPattern = regexp.MustCompile(`^((?:.*[/_.-])?)v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:[-+].*)?$`)
 
 func (a *app) releaseRoot(cmd *cobra.Command, args []string, explicit, prefix string, dry, push, force, affected, all bool) error {
 	if affected || all {
@@ -508,6 +575,9 @@ func (a *app) releaseRoot(cmd *cobra.Command, args []string, explicit, prefix st
 	if err != nil {
 		return codedError{1, err}
 	}
+	if err = checkExplicitVersion(explicit, next, current, force); err != nil {
+		return err
+	}
 	if current != nil {
 		if _, err = g.Resolve(current.Tag); err != nil {
 			return codedError{3, gitclient.ErrIncompleteHistory}
@@ -517,7 +587,7 @@ func (a *app) releaseRoot(cmd *cobra.Command, args []string, explicit, prefix st
 			return classify(ancestorErr)
 		}
 		if !ancestor {
-			return codedError{1, fmt.Errorf("release tag %s is not an ancestor of HEAD", current.Tag)}
+			return classify(service.NotAncestorError(g, current.Tag))
 		}
 		files, diffErr := g.DiffFiles(current.Tag, "HEAD")
 		if diffErr != nil {
@@ -541,38 +611,17 @@ func (a *app) releaseRoot(cmd *cobra.Command, args []string, explicit, prefix st
 		fmt.Fprintf(a.out, "Repository root\nCurrent version: %s\nNext version: %s\nTag: %s\n\nNo changes have been made.\n", cur, next.String(), tag)
 		return nil
 	}
-	clean, err := g.IsClean()
-	if err != nil {
-		return classify(err)
-	}
-	if !clean {
-		return codedError{1, errors.New("working tree is not clean")}
-	}
-	if err = g.CreateTag(tag, "HEAD", "Release v"+next.String()); err != nil {
-		return classify(err)
-	}
-	if push {
-		if err = g.PushTag("origin", tag); err != nil {
-			return classify(err)
-		}
-	}
-	fmt.Fprintln(a.out, tag)
-	return nil
+	return a.publish(g, "origin", []releaseTag{{tag: tag, next: next, message: "Release v" + next.String()}}, push)
 }
 
 func (a *app) configCommand() *cobra.Command {
 	c := &cobra.Command{Use: "config"}
 	c.AddCommand(&cobra.Command{Use: "check", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load(a.configPath)
+		cfg, err := a.loadConfig()
 		if err != nil {
-			return codedError{2, err}
+			return err
 		}
-		names := make([]string, 0, len(cfg.Services))
-		for n := range cfg.Services {
-			names = append(names, n)
-		}
-		sort.Strings(names)
-		fmt.Fprintf(a.out, "configuration valid: %d services\n", len(names))
+		fmt.Fprintf(a.out, "configuration valid: %d services\n", len(cfg.Services))
 		return nil
 	}})
 	return c

@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/ivano/gitreleaser/internal/config"
 	gitclient "github.com/ivano/gitreleaser/internal/git"
@@ -94,34 +95,36 @@ func (e Engine) Status(name string) (Status, error) {
 		return st, err
 	}
 	if !ancestor {
-		return st, fmt.Errorf("release tag %s is not an ancestor of HEAD", rel.Tag)
+		return st, NotAncestorError(e.Git, rel.Tag)
 	}
 	changed, err := e.Git.DiffFiles(rel.Tag, "HEAD")
 	if err != nil {
 		return st, err
 	}
+	roots := append(append([]string{}, svc.Paths...), svc.Dependencies...)
+	patterns := append(append([]string{}, e.Config.Ignore...), svc.Ignore...)
 	seen := map[string]bool{}
 	for _, f := range changed {
-		matched := false
+		// For a rename both paths are evaluated; only the ones relevant to the service are reported.
 		for _, p := range []string{f.OldPath, f.NewPath} {
-			if matchesRoots(p, append(append([]string{}, svc.Paths...), svc.Dependencies...)) && !ignored(p, append(append([]string{}, e.Config.Ignore...), svc.Ignore...)) {
-				matched = true
-			}
-		}
-		if matched {
-			if !seen[f.NewPath] {
-				st.Files = append(st.Files, f.NewPath)
-				seen[f.NewPath] = true
-			}
-			if f.OldPath != f.NewPath && !seen[f.OldPath] {
-				st.Files = append(st.Files, f.OldPath)
-				seen[f.OldPath] = true
+			if !seen[p] && matchesRoots(p, roots) && !ignored(p, patterns) {
+				st.Files = append(st.Files, p)
+				seen[p] = true
 			}
 		}
 	}
 	sort.Strings(st.Files)
 	st.Affected = len(st.Files) > 0
 	return st, nil
+}
+
+// NotAncestorError explains why a release tag is not reachable from HEAD: in a shallow
+// clone the missing history is reported as such instead of as a diverged tag.
+func NotAncestorError(g gitclient.Client, tag string) error {
+	if shallow, err := g.IsShallow(); err == nil && shallow {
+		return gitclient.ErrIncompleteHistory
+	}
+	return fmt.Errorf("release tag %s is not an ancestor of HEAD", tag)
 }
 
 func matchesRoots(file string, roots []string) bool {
@@ -141,9 +144,21 @@ func ignored(file string, patterns []string) bool {
 	}
 	return false
 }
+
+var globCache sync.Map // pattern -> *regexp.Regexp
+
 func glob(pattern, file string) bool {
+	re, ok := globCache.Load(pattern)
+	if !ok {
+		re, _ = globCache.LoadOrStore(pattern, compileGlob(pattern))
+	}
+	return re.(*regexp.Regexp).MatchString(path.Clean(file))
+}
+
+// compileGlob supports "**" (any number of directories), "*" and "?" (within a
+// single path segment); every other character is literal.
+func compileGlob(pattern string) *regexp.Regexp {
 	pattern = path.Clean(pattern)
-	file = path.Clean(file)
 	var b strings.Builder
 	b.WriteByte('^')
 	for i := 0; i < len(pattern); {
@@ -166,6 +181,5 @@ func glob(pattern, file string) bool {
 		}
 	}
 	b.WriteByte('$')
-	ok, err := regexp.MatchString(b.String(), file)
-	return err == nil && ok
+	return regexp.MustCompile(b.String())
 }

@@ -44,3 +44,29 @@ func TestLoadRejectsNonStringServiceVars(t *testing.T) {
 		t.Fatalf("expected a string type error, got %v", err)
 	}
 }
+
+func TestLoadRejectsUnknownFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "releaser.yml")
+	contents := "services:\n  api:\n    paths: [services/api]\n    dependecies: [common]\n"
+	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "dependecies") {
+		t.Fatalf("expected unknown field error, got %v", err)
+	}
+}
+
+func TestValidateRejectsNamesInvalidAsGitRefs(t *testing.T) {
+	for _, name := range []string{"", "a b", "a~b", "a^b", "a:b", "a..b", ".api", "-api", "api.", "api.lock", "a@{b", "a*", "a?", "a[b", `a\b`, "a/b"} {
+		c := Config{Services: map[string]Service{name: {Paths: []string{"x"}}}}
+		if err := c.Validate(); err == nil {
+			t.Errorf("expected %q to be rejected", name)
+		}
+	}
+	for _, name := range []string{"api", "scraper-service", "api_v2", "web.front"} {
+		c := Config{Services: map[string]Service{name: {Paths: []string{"x"}}}}
+		if err := c.Validate(); err != nil {
+			t.Errorf("expected %q to be accepted: %v", name, err)
+		}
+	}
+}
