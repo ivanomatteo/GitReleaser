@@ -368,6 +368,65 @@ Lo script è eseguito dalla root del repository (`--repo`); se il percorso indic
 
 L'esecuzione si ferma al primo script che fallisce e `releaser` termina con lo stesso exit code dello script. Prima di eseguire qualsiasi script tutte le variabili vengono validate: una chiave di `vars` che non produce un nome valido (solo lettere, cifre, `_` e `-`), due chiavi che producono lo stesso nome (per esempio `my-var` e `my_var`) o un path contenente spazi sono un errore di configurazione. `RELEASER_VERSION` e `RELEASER_TAG` sono vuote per un servizio mai rilasciato o se `--repo` non è un repository Git: in quel caso `run` funziona comunque, tranne con `--affected`.
 
+## Generazione di file da template
+
+`template` esegue un template Go ([`text/template`](https://pkg.go.dev/text/template)) una volta per ogni servizio configurato, in ordine alfabetico, oppure solo per il servizio indicato:
+
+```sh
+releaser template deploy.yaml.tpl                  # tutti i servizi, concatenati su stdout
+releaser template api deploy.yaml.tpl > api.yaml   # solo api
+releaser template deploy.yaml.tpl -o 'deploy/{{.Name}}.yaml'  # un file per servizio
+```
+
+Nel template sono disponibili:
+
+| Campo | Valore |
+| --- | --- |
+| `.Name` | nome del servizio |
+| `.Paths` | lista dei `paths` |
+| `.Deps` | lista delle `dependencies` |
+| `.Version` | ultima versione rilasciata, per esempio `2.4.1` (vuota se non disponibile) |
+| `.Tag` | tag dell'ultima release, per esempio `api/v2.4.1` (vuota se non disponibile) |
+| `.Vars` | mappa delle `vars`, con le chiavi originali |
+
+Con la configurazione di esempio, il template:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{.Vars.deployment}}
+spec:
+  template:
+    spec:
+      containers:
+        - name: {{.Name}}
+          image: {{.Vars.image}}:{{.Version}}
+---
+```
+
+produce per `api`:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-production
+spec:
+  template:
+    spec:
+      containers:
+        - name: api
+          image: registry.example.com/project/api:2.4.1
+---
+```
+
+Le liste si scorrono con `range`, per esempio `{{range .Paths}}{{.}} {{end}}`. Una chiave mancante in `.Vars` (per esempio un refuso come `{{.Vars.imgae}}`) è un errore; per una variabile facoltativa usa `index`, che restituisce una stringa vuota: `{{with index .Vars "port"}}port: {{.}}{{end}}`.
+
+Senza `-o` l'output di tutti i servizi è scritto su stdout, uno dopo l'altro. Con `-o`/`--output` ogni servizio è scritto in un file; il path di output è a sua volta un template con gli stessi campi e deve essere diverso per ogni servizio (tipicamente contiene `{{.Name}}`). Le directory mancanti vengono create, i file esistenti sovrascritti, e su stdout è stampato il path di ogni file scritto. Il path del template e quello di output sono relativi alla directory corrente.
+
+Tutti i servizi sono renderizzati prima di scrivere: se il template fallisce per un servizio non viene scritto nulla. `.Version` e `.Tag` sono vuoti per un servizio mai rilasciato o se `--repo` non è un repository Git.
+
 ## Exit code ed errori
 
 Gli errori sono scritti su stderr con prefisso `ERROR:`. Gli exit code sono:
@@ -390,6 +449,7 @@ releaser affected
 releaser changes <service>
 releaser get-var <service> <key>
 releaser run [service] <script> [--affected] [-- args...]
+releaser template [service] <file> [-o <path-template>]
 releaser version-number <service>
 releaser version-tag <service>
 releaser next-version-number <service> <patch|minor|major>

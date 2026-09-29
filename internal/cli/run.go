@@ -32,39 +32,9 @@ func (a *app) runCommand() *cobra.Command {
 		}
 		script := args[len(args)-1]
 
-		var cfg config.Config
-		var names []string
-		if affected {
-			e, err := a.engine(false)
-			if err != nil {
-				return err
-			}
-			cfg = e.Config
-			ss, err := getStatuses(e, e.Names())
-			if err != nil {
-				return classify(err)
-			}
-			for _, s := range ss {
-				if s.Affected {
-					names = append(names, s.Name)
-				}
-			}
-		} else {
-			var err error
-			if cfg, err = a.loadConfig(); err != nil {
-				return err
-			}
-			if len(args) == 2 {
-				if _, ok := cfg.Services[args[0]]; !ok {
-					return fmt.Errorf("unknown service %q", args[0])
-				}
-				names = []string{args[0]}
-			} else {
-				for name := range cfg.Services {
-					names = append(names, name)
-				}
-				slices.Sort(names)
-			}
+		sel, err := a.selectServices(args[:len(args)-1], affected)
+		if err != nil {
+			return err
 		}
 
 		// The script runs from the repository root, so a script found relative to the
@@ -75,32 +45,18 @@ func (a *app) runCommand() *cobra.Command {
 			}
 		}
 
-		// The latest release is exposed when available: outside a Git repository, or for a
-		// service never released, RELEASER_VERSION and RELEASER_TAG are empty.
-		releases := make([]*service.Release, len(names))
-		if g := (gitclient.Client{Dir: a.repo}); g.CheckRepository() == nil {
-			e := service.Engine{Config: cfg, Git: g}
-			for i, name := range names {
-				r, err := e.Latest(name)
-				if err != nil {
-					return classify(err)
-				}
-				releases[i] = r
-			}
-		}
-
 		// Validate every service before running anything.
-		envs := make([][]string, len(names))
-		for i, name := range names {
-			env, err := serviceEnv(name, cfg.Services[name], releases[i])
+		envs := make([][]string, len(sel))
+		for i, t := range sel {
+			env, err := serviceEnv(t.name, t.service, t.release)
 			if err != nil {
 				return codedError{2, err}
 			}
 			envs[i] = env
 		}
 		base := inheritedEnv()
-		for i, name := range names {
-			fmt.Fprintf(a.err, "==> %s\n", name)
+		for i, t := range sel {
+			fmt.Fprintf(a.err, "==> %s\n", t.name)
 			x := exec.Command(script, scriptArgs...)
 			x.Dir = a.repo
 			x.Env = append(slices.Clone(base), envs[i]...)
@@ -112,13 +68,78 @@ func (a *app) runCommand() *cobra.Command {
 				if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && exitErr.ExitCode() > 0 {
 					code = exitErr.ExitCode()
 				}
-				return codedError{code, fmt.Errorf("%s failed for service %s: %w", args[len(args)-1], name, err)}
+				return codedError{code, fmt.Errorf("%s failed for service %s: %w", args[len(args)-1], t.name, err)}
 			}
 		}
 		return nil
 	}}
 	c.Flags().BoolVar(&affected, "affected", false, "run only for affected services")
 	return c
+}
+
+// target is a service selected by run or template, with its latest release (nil when
+// the service was never released or the repository is not a Git repository).
+type target struct {
+	name    string
+	service config.Service
+	release *service.Release
+}
+
+// selectServices returns the named service, or all services in alphabetical order,
+// or with affected only the affected ones (which requires a Git repository).
+func (a *app) selectServices(named []string, affected bool) ([]target, error) {
+	var cfg config.Config
+	var names []string
+	if affected {
+		e, err := a.engine(false)
+		if err != nil {
+			return nil, err
+		}
+		cfg = e.Config
+		ss, err := getStatuses(e, e.Names())
+		if err != nil {
+			return nil, classify(err)
+		}
+		for _, s := range ss {
+			if s.Affected {
+				names = append(names, s.Name)
+			}
+		}
+	} else {
+		var err error
+		if cfg, err = a.loadConfig(); err != nil {
+			return nil, err
+		}
+		if len(named) == 1 {
+			if _, ok := cfg.Services[named[0]]; !ok {
+				return nil, fmt.Errorf("unknown service %q", named[0])
+			}
+			names = named
+		} else {
+			for name := range cfg.Services {
+				names = append(names, name)
+			}
+			slices.Sort(names)
+		}
+	}
+
+	targets := make([]target, len(names))
+	for i, name := range names {
+		targets[i] = target{name: name, service: cfg.Services[name]}
+	}
+	// The latest release is exposed when available: outside a Git repository, or for a
+	// service never released, it is simply missing.
+	if g := (gitclient.Client{Dir: a.repo}); g.CheckRepository() == nil {
+		e := service.Engine{Config: cfg, Git: g}
+		for i := range targets {
+			r, err := e.Latest(targets[i].name)
+			if err != nil {
+				return nil, classify(err)
+			}
+			targets[i].release = r
+		}
+	}
+	return targets, nil
 }
 
 var envNamePattern = regexp.MustCompile(`^[A-Z0-9_]+$`)

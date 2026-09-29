@@ -9,6 +9,7 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it-IT/1.1.0/) e i
 ### Aggiunto
 
 - Comando `run [service] <script> [-- args...]` che esegue uno script per ogni servizio (o solo per quello indicato, o con `--affected` solo per i servizi affected) esponendo `RELEASER_NAME`, `RELEASER_PATHS`, `RELEASER_DEPS`, `RELEASER_VERSION`, `RELEASER_TAG` (vuote se non disponibili) e `RELEASER_VAR_<KEY>`. Si ferma al primo errore propagando l'exit code dello script.
+- Comando `template [service] <file> [-o <path>]` che esegue un template Go per ogni servizio (o solo per quello indicato) con i campi `.Name`, `.Paths`, `.Deps`, `.Version`, `.Tag` e `.Vars`. L'output va su stdout o, con `-o`, in un file per servizio il cui path è a sua volta un template.
 
 ### Modificato
 

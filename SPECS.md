@@ -488,6 +488,20 @@ L'esecuzione si ferma al primo fallimento: `releaser` termina con l'exit code de
 
 ---
 
+# 11.3 Comando `template`
+
+Sintassi:
+
+```bash
+releaser template [service] <file> [-o|--output <path-template>]
+```
+
+Esegue il template Go (`text/template`, opzione `missingkey=error`) contenuto in `<file>` una volta per ogni servizio configurato, in ordine alfabetico, oppure solo per `service`. Il template riceve i campi `.Name`, `.Paths`, `.Deps` (liste), `.Version`, `.Tag` (stringhe vuote se il servizio non ha release o se `--repo` non è un repository Git) e `.Vars` (mappa delle `vars`, vuota se assenti). L'accesso a una chiave inesistente di `.Vars` con la sintassi `.Vars.key` è un errore.
+
+Senza `--output` l'output di tutti i servizi è scritto su stdout, concatenato. Con `--output` il valore è a sua volta un template eseguito con gli stessi dati, che produce il path del file del servizio; due servizi che producono lo stesso path, o un path vuoto, sono un errore. Le directory mancanti sono create, i file esistenti sovrascritti, e su stdout è scritto un path per riga. Tutti i servizi sono renderizzati prima di scrivere qualsiasi output: un errore non lascia output parziale. Gli errori di lettura, parsing o esecuzione del template producono exit code `1`.
+
+---
+
 # 12. Comando `version-tag`
 
 Sintassi:
