@@ -6,6 +6,10 @@ Il formato segue [Keep a Changelog](https://keepachangelog.com/it-IT/1.1.0/) e i
 
 ## [Unreleased]
 
+### Aggiunto
+
+- Comando `run [service] <script> [-- args...]` che esegue uno script per ogni servizio (o solo per quello indicato, o con `--affected` solo per i servizi affected) esponendo `RELEASER_NAME`, `RELEASER_PATHS`, `RELEASER_DEPS`, `RELEASER_VERSION`, `RELEASER_TAG` (vuote se non disponibili) e `RELEASER_VAR_<KEY>`. Si ferma al primo errore propagando l'exit code dello script.
+
 ### Modificato
 
 - Richiesto Go 1.27 o successivo; aggiornate le dipendenze (`Masterminds/semver/v3` 3.5.0, `spf13/cobra` 1.10.2, `spf13/pflag` 1.0.10).

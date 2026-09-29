@@ -53,7 +53,7 @@ func newApp(out, errOut io.Writer) *cobra.Command {
 	r.PersistentFlags().StringVarP(&a.configPath, "config", "c", "releaser.yml", "configuration file")
 	r.PersistentFlags().StringVar(&a.repo, "repo", ".", "Git repository directory")
 	r.AddCommand(a.versionCommand("version-number", false, false), a.versionCommand("version-tag", true, false), a.versionCommand("next-version-number", false, true), a.versionCommand("next-version-tag", true, true))
-	r.AddCommand(a.statusCommand(), a.affectedCommand(), a.changesCommand(), a.getVarCommand(), a.planCommand(), a.releaseCommand(), a.configCommand())
+	r.AddCommand(a.statusCommand(), a.affectedCommand(), a.changesCommand(), a.getVarCommand(), a.planCommand(), a.releaseCommand(), a.runCommand(), a.configCommand())
 	return r
 }
 

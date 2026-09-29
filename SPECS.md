@@ -461,6 +461,33 @@ Servizio o chiave inesistenti producono un errore e un exit code non zero. Il co
 
 ---
 
+# 11.2 Comando `run`
+
+Sintassi:
+
+```bash
+releaser run [service] <script> [--affected] [-- args...]
+```
+
+Esegue `<script>` una volta per ogni servizio configurato, in ordine alfabetico. Con `service` lo esegue solo per quel servizio; con `--affected` solo per i servizi affected (non combinabile con `service`). Gli argomenti dopo `--` sono passati allo script.
+
+Ad ogni esecuzione l'ambiente ereditato è esteso con:
+
+* `RELEASER_NAME`: nome del servizio;
+* `RELEASER_PATHS`: `paths` separati da spazio;
+* `RELEASER_DEPS`: `dependencies` separate da spazio, vuota se assenti;
+* `RELEASER_VERSION`: ultima versione rilasciata del servizio, senza prefisso `v`;
+* `RELEASER_TAG`: tag dell'ultima release;
+* `RELEASER_VAR_<KEY>`: una per chiave di `vars`, con `<KEY>` in maiuscolo e `-` sostituito da `_`.
+
+Eventuali variabili con gli stessi nomi presenti nell'ambiente di `releaser` non sono ereditate. Prima di eseguire qualsiasi script, le variabili di tutti i servizi selezionati sono validate: una chiave che non produce un nome composto solo da `A-Z`, `0-9` e `_`, due chiavi che producono lo stesso nome o un path contenente spazi producono un errore con exit code `2`.
+
+Lo script è eseguito dalla directory `--repo`. Se `<script>` esiste come file rispetto alla directory corrente è eseguito tramite il suo path assoluto, altrimenti è cercato nel `PATH`. Stdin, stdout e stderr sono ereditati; prima di ogni esecuzione è scritta su stderr la riga `==> <service>`.
+
+L'esecuzione si ferma al primo fallimento: `releaser` termina con l'exit code dello script, oppure `1` se lo script non può essere avviato o termina per un segnale. `RELEASER_VERSION` e `RELEASER_TAG` sono vuote se il servizio non ha release o se `--repo` non è un repository Git; solo `--affected` richiede un repository Git.
+
+---
+
 # 12. Comando `version-tag`
 
 Sintassi:

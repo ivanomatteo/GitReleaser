@@ -333,6 +333,41 @@ releaser release --root minor --prefix='release-'
 
 Se non ci sono commit con modifiche dopo il tag precedente, la release richiede `--force`. `--dry-run` e `--push` sono supportati; il push usa `origin`. `--root` è mutuamente esclusivo con `--affected` e `--all`.
 
+## Esecuzione di script per servizio
+
+`run` esegue uno script (o un qualsiasi comando) una volta per ogni servizio configurato, in ordine alfabetico, oppure solo per il servizio indicato:
+
+```sh
+releaser run build.sh           # una volta per servizio
+releaser run api build.sh       # solo per api
+releaser run --affected build.sh  # solo per i servizi affected
+releaser run api build.sh -- --push latest  # argomenti passati allo script
+```
+
+Allo script sono esposte queste variabili d'ambiente:
+
+| Variabile | Valore |
+| --- | --- |
+| `RELEASER_NAME` | nome del servizio |
+| `RELEASER_PATHS` | `paths` separati da spazio |
+| `RELEASER_DEPS` | `dependencies` separate da spazio (vuota se assenti) |
+| `RELEASER_VERSION` | ultima versione rilasciata, per esempio `2.4.1` (vuota se non disponibile) |
+| `RELEASER_TAG` | tag dell'ultima release, per esempio `api/v2.4.1` (vuota se non disponibile) |
+| `RELEASER_VAR_<KEY>` | una per ogni chiave di `vars`, in maiuscolo e con `-` sostituito da `_` |
+
+Con la configurazione di esempio, per `api` lo script riceve `RELEASER_VAR_IMAGE=registry.example.com/project/api` e `RELEASER_VAR_DEPLOYMENT=api-production`:
+
+```sh
+#!/bin/sh
+set -e
+for p in $RELEASER_PATHS; do echo "path: $p"; done
+docker build -t "$RELEASER_VAR_IMAGE" "services/$RELEASER_NAME"
+```
+
+Lo script è eseguito dalla root del repository (`--repo`); se il percorso indicato esiste rispetto alla directory corrente viene eseguito direttamente (deve essere eseguibile e avere uno shebang), altrimenti è cercato nel `PATH`. Stdin, stdout e stderr sono quelli di `releaser`; prima di ogni esecuzione su stderr è stampata la riga `==> <service>`.
+
+L'esecuzione si ferma al primo script che fallisce e `releaser` termina con lo stesso exit code dello script. Prima di eseguire qualsiasi script tutte le variabili vengono validate: una chiave di `vars` che non produce un nome valido (solo lettere, cifre, `_` e `-`), due chiavi che producono lo stesso nome (per esempio `my-var` e `my_var`) o un path contenente spazi sono un errore di configurazione. `RELEASER_VERSION` e `RELEASER_TAG` sono vuote per un servizio mai rilasciato o se `--repo` non è un repository Git: in quel caso `run` funziona comunque, tranne con `--affected`.
+
 ## Exit code ed errori
 
 Gli errori sono scritti su stderr con prefisso `ERROR:`. Gli exit code sono:
@@ -354,6 +389,7 @@ releaser status [service] [--verbose]
 releaser affected
 releaser changes <service>
 releaser get-var <service> <key>
+releaser run [service] <script> [--affected] [-- args...]
 releaser version-number <service>
 releaser version-tag <service>
 releaser next-version-number <service> <patch|minor|major>
