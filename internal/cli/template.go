@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"text/template"
 
 	"github.com/spf13/cobra"
@@ -18,6 +20,27 @@ type templateData struct {
 	Version string
 	Tag     string
 	Vars    map[string]string
+}
+
+// templateVars returns vars with "-" replaced by "_" in the keys, so that a key
+// like docker-file can be written as .Vars.docker_file.
+func templateVars(name string, vars map[string]string) (map[string]string, error) {
+	keys := make([]string, 0, len(vars))
+	for k := range vars {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	result := make(map[string]string, len(vars))
+	seen := map[string]string{}
+	for _, k := range keys {
+		n := strings.ReplaceAll(k, "-", "_")
+		if other, ok := seen[n]; ok {
+			return nil, fmt.Errorf("service %s: variables %q and %q both map to .Vars.%s", name, other, k, n)
+		}
+		seen[n] = k
+		result[n] = vars[k]
+	}
+	return result, nil
 }
 
 func (a *app) templateCommand() *cobra.Command {
@@ -51,10 +74,11 @@ func (a *app) templateCommand() *cobra.Command {
 		results := make([]rendered, 0, len(sel))
 		owners := map[string]string{}
 		for _, t := range sel {
-			data := templateData{Name: t.name, Paths: t.service.Paths, Deps: t.service.Dependencies, Vars: t.service.Vars}
-			if data.Vars == nil {
-				data.Vars = map[string]string{}
+			vars, err := templateVars(t.name, t.service.Vars)
+			if err != nil {
+				return codedError{2, err}
 			}
+			data := templateData{Name: t.name, Paths: t.service.Paths, Deps: t.service.Dependencies, Vars: vars}
 			if t.release != nil {
 				data.Version, data.Tag = t.release.Version.String(), t.release.Tag
 			}

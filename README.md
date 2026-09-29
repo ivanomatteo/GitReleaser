@@ -387,7 +387,7 @@ Nel template sono disponibili:
 | `.Deps` | lista delle `dependencies` |
 | `.Version` | ultima versione rilasciata, per esempio `2.4.1` (vuota se non disponibile) |
 | `.Tag` | tag dell'ultima release, per esempio `api/v2.4.1` (vuota se non disponibile) |
-| `.Vars` | mappa delle `vars`, con le chiavi originali |
+| `.Vars` | mappa delle `vars`, con `-` sostituito da `_` nelle chiavi |
 
 Con la configurazione di esempio, il template:
 
@@ -422,6 +422,8 @@ spec:
 ```
 
 Le liste si scorrono con `range`, per esempio `{{range .Paths}}{{.}} {{end}}`. Una chiave mancante in `.Vars` (per esempio un refuso come `{{.Vars.imgae}}`) è un errore; per una variabile facoltativa usa `index`, che restituisce una stringa vuota: `{{with index .Vars "port"}}port: {{.}}{{end}}`.
+
+Nei template un nome dopo il punto non può contenere `-`, quindi nelle chiavi di `.Vars` ogni `-` è sostituito da `_`: la variabile `docker-file` si scrive `{{.Vars.docker_file}}`. Due chiavi che producono lo stesso nome (per esempio `docker-file` e `docker_file`) sono un errore di configurazione.
 
 Senza `-o` l'output di tutti i servizi è scritto su stdout, uno dopo l'altro. Con `-o`/`--output` ogni servizio è scritto in un file; il path di output è a sua volta un template con gli stessi campi e deve essere diverso per ogni servizio (tipicamente contiene `{{.Name}}`). Le directory mancanti vengono create, i file esistenti sovrascritti, e su stdout è stampato il path di ogni file scritto. Il path del template e quello di output sono relativi alla directory corrente.
 

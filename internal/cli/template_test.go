@@ -70,3 +70,21 @@ func TestTemplateErrorsWriteNothing(t *testing.T) {
 		}
 	}
 }
+
+func TestTemplateVarsReplaceDashes(t *testing.T) {
+	repo, _, write := monorepo(t)
+	write("releaser.yml", "services:\n  api:\n    paths: [services/api]\n    vars:\n      docker-file: Dockerfile.api\n")
+	dir := t.TempDir()
+	tpl := filepath.Join(dir, "svc.tpl")
+	if err := os.WriteFile(tpl, []byte("{{.Vars.docker_file}}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := runCapture(t, "--repo", repo, "template", tpl); err != nil || out != "Dockerfile.api\n" {
+		t.Fatalf("got %q, %v", out, err)
+	}
+
+	write("releaser.yml", "services:\n  api:\n    paths: [services/api]\n    vars:\n      docker-file: a\n      docker_file: b\n")
+	if _, err := runCapture(t, "--repo", repo, "template", tpl); err == nil || ExitCode(err) != 2 || !strings.Contains(err.Error(), ".Vars.docker_file") {
+		t.Fatalf("expected a collision error, got %v", err)
+	}
+}
