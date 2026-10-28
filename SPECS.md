@@ -307,6 +307,8 @@ git diff scraper-service/v0.1.5..HEAD
 
 Baselines are not global.
 
+The comparison is between the tree of the tag and the tree of `HEAD`, not the list of commits in between: a change made and then reverted after the tag does not make the service affected.
+
 ---
 
 # 9. Finding the latest release
@@ -344,6 +346,14 @@ scraper-service/v0.1.5
 ```
 
 Sorting must be done by SemVer, not lexicographically.
+
+The latest release is the highest SemVer among all the service's tags, regardless of the branch they were created on. It must be an ancestor of `HEAD`: if it is not, for example because it was created on an unmerged hotfix branch, `status`, `affected`, `changes`, `plan`, `release`, the version commands (sections 11–14), `run` and `template` (sections 11.2 and 11.3) must fail with exit code `1`, without writing anything to `stdout`, instead of computing changes or versions against an unrelated commit. The error must name the tag:
+
+```text
+ERROR: latest release api/v2.4.2 is not an ancestor of HEAD; it was probably created on an unmerged branch (merge it, or run from it)
+```
+
+Commands that evaluate every service fail if any of them has such a tag. In a shallow clone the same condition is reported as missing history (section 35).
 
 ---
 
@@ -484,7 +494,7 @@ Any variables with the same names present in `releaser`'s environment are not in
 
 The script runs from the `--repo` directory. If `<script>` exists as a file relative to the current directory it is executed through its absolute path, otherwise it is looked up in the `PATH`. Stdin, stdout and stderr are inherited; before each run the line `==> <service>` is written to stderr.
 
-Execution stops at the first failure: `releaser` exits with the script's exit code, or `1` if the script cannot be started or is terminated by a signal. `RELEASER_VERSION` and `RELEASER_TAG` are empty if the service has no release or if `--repo` is not a Git repository; only `--affected` requires a Git repository.
+Execution stops at the first failure: `releaser` exits with the script's exit code, or `1` if the script cannot be started or is terminated by a signal. `RELEASER_VERSION` and `RELEASER_TAG` are empty if the service has no release or if `--repo` is not a Git repository; only `--affected` requires a Git repository. Inside a Git repository the latest release of every selected service must be an ancestor of `HEAD` (section 9); otherwise the command fails before running any script.
 
 ---
 
@@ -498,7 +508,7 @@ releaser template [service] <file> [-o|--output <path-template>]
 
 Executes the Go template (`text/template`, option `missingkey=error`) contained in `<file>` once for each configured service, in alphabetical order, or only for `service`. The template receives the fields `.Name`, `.Paths`, `.Deps` (lists), `.Version`, `.Tag` (empty strings if the service has no release or if `--repo` is not a Git repository) and `.Vars` (map of `vars`, empty if none, with every `-` in the keys replaced by `_`, so that `docker-file` is accessible as `.Vars.docker_file`; two keys that produce the same name are a configuration error with exit code `2`). Accessing a non-existent `.Vars` key with the `.Vars.key` syntax is an error.
 
-Without `--output`, the output of all services is written to stdout, concatenated. With `--output`, the value is itself a template executed with the same data, which produces the path of the service's file; two services producing the same path, or an empty path, are an error. Missing directories are created, existing files are overwritten, and one path per line is written to stdout. All services are rendered before any output is written: an error leaves no partial output. Template read, parse or execution errors produce exit code `1`.
+Without `--output`, the output of all services is written to stdout, concatenated. With `--output`, the value is itself a template executed with the same data, which produces the path of the service's file; two services producing the same path, or an empty path, are an error. Missing directories are created, existing files are overwritten, and one path per line is written to stdout. All services are rendered before any output is written: an error leaves no partial output. Template read, parse or execution errors produce exit code `1`. As for `run`, inside a Git repository the latest release of every selected service must be an ancestor of `HEAD` (section 9); otherwise the command fails without writing any output.
 
 ---
 
@@ -639,7 +649,9 @@ Rules:
 * no descriptive prefix;
 * trailing newline allowed;
 * `exit 0` on success;
-* non-zero exit code on error.
+* non-zero exit code on error, with nothing written to `stdout`.
+
+The value is written only if the latest release is an ancestor of `HEAD` (section 9). On error the tag that was found may appear in the message on `stderr`, never on `stdout`, so that `VERSION=$(...)` never captures a value from a failed command.
 
 Example:
 
@@ -1171,6 +1183,8 @@ It must not silently produce a potentially wrong `affected` result.
 
 In particular, if in a shallow clone a tag is not an ancestor of `HEAD`, the error must indicate missing history (exit code `3`) and not a diverging tag.
 
+This also applies to the version commands (sections 11–14), `run` and `template` (sections 11.2 and 11.3): since they verify ancestry, the tags alone are not enough and the history between the latest release and `HEAD` must be available.
+
 ---
 
 # 36. No implicit network access
@@ -1200,7 +1214,7 @@ The pipeline is responsible for providing sufficient history and tags.
 4 = internal error (reserved, currently unused)
 ```
 
-Code `1` also covers invalid CLI arguments or flags, unknown service, unknown variable, invalid bump and service without a release. Code `2` covers a missing configuration file, invalid YAML, unknown keys and invalid names or paths. Code `3` covers an invalid repository, incomplete history and failed Git commands, including push.
+Code `1` also covers invalid CLI arguments or flags, unknown service, unknown variable, invalid bump, service without a release and a latest release that is not an ancestor of `HEAD`. Code `2` covers a missing configuration file, invalid YAML, unknown keys and invalid names or paths. Code `3` covers an invalid repository, incomplete history and failed Git commands, including push.
 
 ---
 

@@ -11,9 +11,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/ivano/gitreleaser/internal/config"
-	gitclient "github.com/ivano/gitreleaser/internal/git"
-	"github.com/ivano/gitreleaser/internal/service"
+	"github.com/ivanomatteo/GitReleaser/internal/config"
+	gitclient "github.com/ivanomatteo/GitReleaser/internal/git"
+	"github.com/ivanomatteo/GitReleaser/internal/service"
 	"github.com/spf13/cobra"
 )
 
@@ -128,11 +128,12 @@ func (a *app) selectServices(named []string, affected bool) ([]target, error) {
 		targets[i] = target{name: name, service: cfg.Services[name]}
 	}
 	// The latest release is exposed when available: outside a Git repository, or for a
-	// service never released, it is simply missing.
+	// service never released, it is simply missing. Inside a repository it must be an
+	// ancestor of HEAD, as for every other command.
 	if g := (gitclient.Client{Dir: a.repo}); g.CheckRepository() == nil {
 		e := service.Engine{Config: cfg, Git: g}
 		for i := range targets {
-			r, err := e.Latest(targets[i].name)
+			r, err := e.Baseline(targets[i].name)
 			if err != nil {
 				return nil, classify(err)
 			}

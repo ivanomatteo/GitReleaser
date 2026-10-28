@@ -8,9 +8,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ivano/gitreleaser/internal/config"
-	gitclient "github.com/ivano/gitreleaser/internal/git"
-	"github.com/ivano/gitreleaser/internal/version"
+	"github.com/ivanomatteo/GitReleaser/internal/config"
+	gitclient "github.com/ivanomatteo/GitReleaser/internal/git"
+	"github.com/ivanomatteo/GitReleaser/internal/version"
 )
 
 type Release struct {
@@ -73,12 +73,33 @@ func (e Engine) Latest(name string) (*Release, error) {
 	return best, nil
 }
 
+// Baseline returns the latest release of a service, or nil if it was never released.
+// The release must be reachable from HEAD: a tag created on an unmerged branch is an error,
+// so that neither changes nor versions are computed against an unrelated commit.
+func (e Engine) Baseline(name string) (*Release, error) {
+	rel, err := e.Latest(name)
+	if err != nil || rel == nil {
+		return rel, err
+	}
+	if _, err = e.Git.Resolve(rel.Tag); err != nil {
+		return nil, gitclient.ErrIncompleteHistory
+	}
+	ancestor, err := e.Git.IsAncestor(rel.Tag, "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	if !ancestor {
+		return nil, NotAncestorError(e.Git, rel.Tag)
+	}
+	return rel, nil
+}
+
 func (e Engine) Status(name string) (Status, error) {
 	svc, err := e.RequireService(name)
 	if err != nil {
 		return Status{}, err
 	}
-	rel, err := e.Latest(name)
+	rel, err := e.Baseline(name)
 	if err != nil {
 		return Status{}, err
 	}
@@ -86,16 +107,6 @@ func (e Engine) Status(name string) (Status, error) {
 	if rel == nil {
 		st.Affected = true
 		return st, nil
-	}
-	if _, err = e.Git.Resolve(rel.Tag); err != nil {
-		return st, gitclient.ErrIncompleteHistory
-	}
-	ancestor, err := e.Git.IsAncestor(rel.Tag, "HEAD")
-	if err != nil {
-		return st, err
-	}
-	if !ancestor {
-		return st, NotAncestorError(e.Git, rel.Tag)
 	}
 	changed, err := e.Git.DiffFiles(rel.Tag, "HEAD")
 	if err != nil {
@@ -124,7 +135,7 @@ func NotAncestorError(g gitclient.Client, tag string) error {
 	if shallow, err := g.IsShallow(); err == nil && shallow {
 		return gitclient.ErrIncompleteHistory
 	}
-	return fmt.Errorf("release tag %s is not an ancestor of HEAD", tag)
+	return fmt.Errorf("latest release %s is not an ancestor of HEAD; it was probably created on an unmerged branch (merge it, or run from it)", tag)
 }
 
 func matchesRoots(file string, roots []string) bool {

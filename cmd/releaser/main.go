@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ivano/gitreleaser/internal/cli"
+	"github.com/ivanomatteo/GitReleaser/internal/cli"
 )
 
 func main() {

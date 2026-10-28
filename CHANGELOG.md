@@ -4,12 +4,25 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.1.4]
+## [Unreleased]
 
 ### Added
 
 - `run [service] <script> [-- args...]` command that runs a script for each service (or only for the given one, or with `--affected` only for affected services), exposing `RELEASER_NAME`, `RELEASER_PATHS`, `RELEASER_DEPS`, `RELEASER_VERSION`, `RELEASER_TAG` (empty if not available) and `RELEASER_VAR_<KEY>`. It stops at the first error, propagating the script's exit code.
 - `template [service] <file> [-o <path>]` command that executes a Go template for each service (or only for the given one) with the fields `.Name`, `.Paths`, `.Deps`, `.Version`, `.Tag` and `.Vars` (with `-` replaced by `_` in the keys, for example `.Vars.docker_file`). Output goes to stdout or, with `-o`, to one file per service whose path is itself a template.
+
+### Changed
+
+- `version-number`, `version-tag`, `next-version-number` and `next-version-tag` require the latest release of the service to be an ancestor of `HEAD`, like `status` and `release`. Previously they returned the version of a tag created on an unmerged branch, such as a hotfix; they now fail with exit code 1 and write nothing to stdout. In a shallow clone they need enough history, not only the tags, otherwise they fail with exit code 3.
+- `run` and `template` apply the same check, inside a Git repository, to every selected service before running any script or writing any output, instead of exposing such a tag's version in `RELEASER_VERSION`/`RELEASER_TAG` and `.Version`/`.Tag`. Outside a Git repository nothing changes.
+- The error for a latest release that is not an ancestor of `HEAD` now names the tag as the latest release and suggests merging its branch or running from it.
+- The minimum Go version is 1.26 instead of 1.27: nothing in the code requires 1.27.
+
+### Fixed
+
+- The module path is now `github.com/ivanomatteo/GitReleaser`, matching the repository, so `go install github.com/ivanomatteo/GitReleaser/cmd/releaser@latest` works.
+
+## [0.1.4] - 2026-09-29
 
 ### Changed
 
@@ -75,7 +88,8 @@ First release.
 - Distinct exit codes for validation (1), configuration (2) and Git (3) errors.
 - Multi-platform builds with GoReleaser and a GitHub Actions workflow to publish releases.
 
-[Unreleased]: https://github.com/ivanomatteo/GitReleaser/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/ivanomatteo/GitReleaser/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/ivanomatteo/GitReleaser/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/ivanomatteo/GitReleaser/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/ivanomatteo/GitReleaser/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/ivanomatteo/GitReleaser/compare/v0.1.0...v0.1.1

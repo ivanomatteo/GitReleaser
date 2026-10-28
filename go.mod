@@ -1,6 +1,6 @@
-module github.com/ivano/gitreleaser
+module github.com/ivanomatteo/GitReleaser
 
-go 1.27
+go 1.26
 
 require (
 	github.com/Masterminds/semver/v3 v3.5.0

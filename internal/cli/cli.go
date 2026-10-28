@@ -11,10 +11,10 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/ivano/gitreleaser/internal/config"
-	gitclient "github.com/ivano/gitreleaser/internal/git"
-	"github.com/ivano/gitreleaser/internal/service"
-	"github.com/ivano/gitreleaser/internal/version"
+	"github.com/ivanomatteo/GitReleaser/internal/config"
+	gitclient "github.com/ivanomatteo/GitReleaser/internal/git"
+	"github.com/ivanomatteo/GitReleaser/internal/service"
+	"github.com/ivanomatteo/GitReleaser/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -118,7 +118,7 @@ func (a *app) versionCommand(use string, tag, next bool) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		r, err := e.Latest(args[0])
+		r, err := e.Baseline(args[0])
 		if err != nil {
 			return classify(err)
 		}

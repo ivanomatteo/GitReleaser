@@ -191,3 +191,61 @@ func TestUntrackedFilesDoNotBlockRelease(t *testing.T) {
 		t.Fatalf("expected dirty tree error, got %v", err)
 	}
 }
+
+func TestDivergedTagFailsStatusVersionRunAndTemplate(t *testing.T) {
+	repo, git, write := monorepo(t)
+	write("releaser.yml", "services:\n  api:\n    paths: [services/api]\n  worker:\n    paths: [services/worker]\n")
+	write("services/worker/main.go", "package worker\n")
+	git("add", ".")
+	git("commit", "-m", "worker")
+	git("checkout", "-q", "-b", "hotfix")
+	write("services/api/main.go", "package api\n// hotfix\n")
+	git("commit", "-am", "hotfix")
+	git("tag", "-a", "api/v1.0.1", "-m", "Release api v1.0.1")
+	git("checkout", "-q", "-")
+	write("services/api/main.go", "package api\n// mainline\n")
+	git("commit", "-am", "mainline")
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "show.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho \"$RELEASER_NAME $RELEASER_VERSION\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tpl := filepath.Join(dir, "svc.tpl")
+	if err := os.WriteFile(tpl, []byte("{{.Name}} {{.Version}}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, args := range [][]string{
+		{"status", "api"},
+		{"version-number", "api"},
+		{"version-tag", "api"},
+		{"next-version-number", "api", "patch"},
+		{"next-version-tag", "api", "patch"},
+		{"run", script},
+		{"run", "api", script},
+		{"template", tpl},
+		{"template", "api", tpl},
+	} {
+		out, err := runCapture(t, append([]string{"--repo", repo}, args...)...)
+		if err == nil || ExitCode(err) != 1 || !strings.Contains(err.Error(), "latest release api/v1.0.1 is not an ancestor of HEAD") {
+			t.Errorf("%v: expected diverged tag error with exit 1, got %v (exit %d)", args, err, ExitCode(err))
+		}
+		if out != "" {
+			t.Errorf("%v: unexpected stdout %q", args, out)
+		}
+	}
+
+	// A service whose own release is fine is not blocked by another service's diverged tag.
+	if out, err := runCapture(t, "--repo", repo, "run", "worker", script); err != nil || out != "worker \n" {
+		t.Errorf("run worker: got %q, %v", out, err)
+	}
+	if out, err := runCapture(t, "--repo", repo, "template", "worker", tpl); err != nil || out != "worker \n" {
+		t.Errorf("template worker: got %q, %v", out, err)
+	}
+
+	git("checkout", "-q", "hotfix")
+	if out, err := runCapture(t, "--repo", repo, "next-version-tag", "api", "patch"); err != nil || out != "api/v1.0.2\n" {
+		t.Fatalf("from the hotfix branch: got %q, %v", out, err)
+	}
+}
