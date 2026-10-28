@@ -1,79 +1,79 @@
 # Changelog
 
-Tutte le modifiche rilevanti del progetto sono documentate in questo file.
+All notable changes to this project are documented in this file.
 
-Il formato segue [Keep a Changelog](https://keepachangelog.com/it-IT/1.1.0/) e il progetto adotta il [Semantic Versioning](https://semver.org/lang/it/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.4]
 
-### Aggiunto
+### Added
 
-- Comando `run [service] <script> [-- args...]` che esegue uno script per ogni servizio (o solo per quello indicato, o con `--affected` solo per i servizi affected) esponendo `RELEASER_NAME`, `RELEASER_PATHS`, `RELEASER_DEPS`, `RELEASER_VERSION`, `RELEASER_TAG` (vuote se non disponibili) e `RELEASER_VAR_<KEY>`. Si ferma al primo errore propagando l'exit code dello script.
-- Comando `template [service] <file> [-o <path>]` che esegue un template Go per ogni servizio (o solo per quello indicato) con i campi `.Name`, `.Paths`, `.Deps`, `.Version`, `.Tag` e `.Vars` (con `-` sostituito da `_` nelle chiavi, per esempio `.Vars.docker_file`). L'output va su stdout o, con `-o`, in un file per servizio il cui path è a sua volta un template.
+- `run [service] <script> [-- args...]` command that runs a script for each service (or only for the given one, or with `--affected` only for affected services), exposing `RELEASER_NAME`, `RELEASER_PATHS`, `RELEASER_DEPS`, `RELEASER_VERSION`, `RELEASER_TAG` (empty if not available) and `RELEASER_VAR_<KEY>`. It stops at the first error, propagating the script's exit code.
+- `template [service] <file> [-o <path>]` command that executes a Go template for each service (or only for the given one) with the fields `.Name`, `.Paths`, `.Deps`, `.Version`, `.Tag` and `.Vars` (with `-` replaced by `_` in the keys, for example `.Vars.docker_file`). Output goes to stdout or, with `-o`, to one file per service whose path is itself a template.
 
-### Modificato
+### Changed
 
-- Richiesto Go 1.27 o successivo; aggiornate le dipendenze (`Masterminds/semver/v3` 3.5.0, `spf13/cobra` 1.10.2, `spf13/pflag` 1.0.10).
-- Il `releaser.yml` predefinito è cercato nella directory indicata da `--repo` invece che nella directory corrente. Un `--config` relativo passato esplicitamente resta relativo alla directory corrente.
-- Le chiavi sconosciute in `releaser.yml` sono un errore di configurazione (exit code 2): un refuso come `dependecies` non disattiva più silenziosamente le dipendenze.
-- I nomi dei servizi devono essere validi come componente di un tag Git (niente spazi, `~ ^ : ? * [ \`, `..`, `@{`, né inizio con `.`/`-` o fine con `.`/`.lock`).
-- `release --version` rifiuta una versione non maggiore dell'ultima release; `--force` permette di creare comunque il tag, che però non diventa l'ultima release.
-- I file non tracciati non bloccano più la release: la working tree è considerata pulita se non ci sono modifiche ai file tracciati.
-- Con `--push` tutti i tag creati sono pubblicati con un unico `git push --atomic`. Se la creazione o il push falliscono, i tag locali creati dal comando vengono eliminati, così il comando può essere rilanciato.
-- `release <service>` senza bump né `--version` segnala subito l'argomento mancante invece dell'errore "not affected".
+- Go 1.27 or later is required; dependencies updated (`Masterminds/semver/v3` 3.5.0, `spf13/cobra` 1.10.2, `spf13/pflag` 1.0.10).
+- The default `releaser.yml` is looked up in the directory given by `--repo` instead of the current directory. An explicitly passed relative `--config` stays relative to the current directory.
+- Unknown keys in `releaser.yml` are a configuration error (exit code 2): a typo such as `dependecies` no longer silently disables dependencies.
+- Service names must be valid as a Git tag component (no spaces, `~ ^ : ? * [ \`, `..`, `@{`, and no leading `.`/`-` or trailing `.`/`.lock`).
+- `release --version` rejects a version that is not greater than the latest release; `--force` allows creating the tag anyway, but it does not become the latest release.
+- Untracked files no longer block a release: the working tree is considered clean if there are no changes to tracked files.
+- With `--push`, all created tags are published with a single `git push --atomic`. If creation or push fails, the local tags created by the command are deleted, so the command can be rerun.
+- `release <service>` without a bump or `--version` now reports the missing argument immediately instead of the "not affected" error.
 
-### Corretto
+### Fixed
 
-- File con caratteri non ASCII, spazi o virgolette nel nome non venivano riconosciuti come modifiche del servizio, a causa del quoting dei path di `git diff`. Il rilevamento usa ora `git diff-tree -z`, indipendente dalla configurazione Git dell'utente.
-- In una shallow clone la history mancante era segnalata come "release tag is not an ancestor of HEAD" (exit code 1); ora è riportata come history incompleta (exit code 3), anche con `--root`.
-- `release --root` deduceva prefix errati da tag come `dev1.0.0` (prefix `de`). Un prefix dedotto deve ora essere vuoto o terminare con `/`, `-`, `_` o `.`.
-- `changes` riportava per un rename anche il path esterno al servizio; ora elenca solo i path rilevanti.
-- Un errore nel push di una release bulk poteva lasciare tag pubblicati solo in parte.
+- Files with non-ASCII characters, spaces or quotes in their names were not recognized as service changes, because of `git diff` path quoting. Detection now uses `git diff-tree -z`, independent of the user's Git configuration.
+- In a shallow clone, missing history was reported as "release tag is not an ancestor of HEAD" (exit code 1); it is now reported as incomplete history (exit code 3), also with `--root`.
+- `release --root` inferred wrong prefixes from tags such as `dev1.0.0` (prefix `de`). An inferred prefix must now be empty or end with `/`, `-`, `_` or `.`.
+- For a rename, `changes` also reported the path outside the service; it now lists only the relevant paths.
+- A push failure during a bulk release could leave tags only partially published.
 
-### Documentazione
+### Documentation
 
-- SPECS.md allineata all'implementazione: package `internal/version`, chiavi `remote` e `ignore`, `paths` obbligatorio, formato di `status --verbose` per i servizi non rilasciati, eccezione `--new` per `--version` in bulk, exit code, sintassi dei glob di `ignore`, gestione dei rename, prerelease e build metadata.
-- README aggiornato con risoluzione della configurazione, validazione, push atomico, regola sul prefix di `--root`, prerelease e working tree.
+- SPECS.md aligned with the implementation: `internal/version` package, `remote` and `ignore` keys, required `paths`, `status --verbose` format for unreleased services, `--new` exception for `--version` in bulk mode, exit codes, `ignore` glob syntax, rename handling, prereleases and build metadata.
+- README updated with configuration resolution, validation, atomic push, the `--root` prefix rule, prereleases and working tree.
 
 ## [0.1.3] - 2026-08-20
 
-### Aggiunto
+### Added
 
-- Sezione `vars` per servizio in `releaser.yml`: mappa di chiavi e valori stringa.
-- Comando `get-var <service> <key>`, che stampa solo il valore ed è utilizzabile anche fuori da un repository Git.
+- Per-service `vars` section in `releaser.yml`: a map of string keys and values.
+- `get-var <service> <key>` command, which prints only the value and can also be used outside a Git repository.
 
 ## [0.1.2] - 2026-08-18
 
-### Aggiunto
+### Added
 
-- `release --new [--version <semver>]`: crea su `HEAD` il primo tag (predefinito `0.1.0`) per ogni servizio configurato che non ne ha ancora uno. Il comando è idempotente.
+- `release --new [--version <semver>]`: creates on `HEAD` the first tag (default `0.1.0`) for every configured service that does not have one yet. The command is idempotent.
 
-### Documentazione
+### Documentation
 
-- README esteso con motivazioni, installazione, configurazione ed esempi d'uso.
+- README expanded with rationale, installation, configuration and usage examples.
 
 ## [0.1.1] - 2026-08-12
 
-### Aggiunto
+### Added
 
-- Binari precompilati per macOS (`darwin/amd64` e `darwin/arm64`).
+- Prebuilt binaries for macOS (`darwin/amd64` and `darwin/arm64`).
 
 ## [0.1.0] - 2026-08-12
 
-Prima release.
+First release.
 
-### Aggiunto
+### Added
 
-- Versioning indipendente dei servizi di un monorepo tramite tag Git `<service>/v<semver>`, con parsing SemVer strict e senza file `VERSION`.
-- Configurazione `releaser.yml` con `paths`, `dependencies` e `ignore` per servizio, `ignore` globale e `remote`; comando `config check`.
-- Comandi di interrogazione `status [service] [--verbose]`, `affected`, `changes <service>` e `plan [--format json]`, con baseline indipendente per servizio.
-- Primitive per scripting `version-number`, `version-tag`, `next-version-number` e `next-version-tag`.
-- `release <service> <patch|minor|major>` e `release <service> --version <semver>`, con tag annotati, `--dry-run` e `--push`.
-- Controllo affected in `release`, disattivabile con `--force`.
-- Release in blocco con `release --affected <bump>` e `release --all --force <bump>`, validate interamente prima di creare tag.
-- `release --root` per repository standard, senza configurazione, con deduzione del prefix dei tag e `--prefix`.
-- Exit code distinti per errori di validazione (1), configurazione (2) e Git (3).
-- Build multipiattaforma con GoReleaser e workflow GitHub Actions per la pubblicazione delle release.
+- Independent versioning of monorepo services through `<service>/v<semver>` Git tags, with strict SemVer parsing and no `VERSION` files.
+- `releaser.yml` configuration with per-service `paths`, `dependencies` and `ignore`, global `ignore` and `remote`; `config check` command.
+- Query commands `status [service] [--verbose]`, `affected`, `changes <service>` and `plan [--format json]`, with an independent baseline per service.
+- Scripting primitives `version-number`, `version-tag`, `next-version-number` and `next-version-tag`.
+- `release <service> <patch|minor|major>` and `release <service> --version <semver>`, with annotated tags, `--dry-run` and `--push`.
+- Affected check in `release`, which can be bypassed with `--force`.
+- Bulk releases with `release --affected <bump>` and `release --all --force <bump>`, fully validated before any tag is created.
+- `release --root` for standard repositories, with no configuration, tag prefix inference and `--prefix`.
+- Distinct exit codes for validation (1), configuration (2) and Git (3) errors.
+- Multi-platform builds with GoReleaser and a GitHub Actions workflow to publish releases.
 
 [Unreleased]: https://github.com/ivanomatteo/GitReleaser/compare/v0.1.3...HEAD
 [0.1.3]: https://github.com/ivanomatteo/GitReleaser/compare/v0.1.2...v0.1.3

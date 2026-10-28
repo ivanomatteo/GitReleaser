@@ -1,35 +1,35 @@
-# Specifiche aggiornate — Monorepo Microservice Release Tool
+# Updated specifications — Monorepo Microservice Release Tool
 
-## 1. Scopo
+## 1. Purpose
 
-Realizzare un tool CLI scritto in **Go** per gestire versioning e release indipendenti di microservizi contenuti in un unico monorepo.
+Build a CLI tool written in **Go** to manage independent versioning and releases of microservices contained in a single monorepo.
 
-Il tool deve consentire di:
+The tool must make it possible to:
 
-* individuare l’ultima versione rilasciata di ogni microservizio;
-* determinare quali servizi hanno modifiche non ancora rilasciate;
-* considerare dipendenze condivise, ad esempio moduli `common`;
-* calcolare la prossima versione SemVer;
-* creare tag Git namespacizzati per servizio;
-* esporre facilmente numero versione e tag completo;
-* produrre output facilmente utilizzabile da pipeline CI/CD;
-* mantenere **Git come unica source of truth del versioning**.
+* find the latest released version of each microservice;
+* determine which services have unreleased changes;
+* take shared dependencies into account, for example `common` modules;
+* compute the next SemVer version;
+* create per-service namespaced Git tags;
+* easily expose the version number and the full tag;
+* produce output that is easy to consume from CI/CD pipelines;
+* keep **Git as the single source of truth for versioning**.
 
-Non deve esistere alcun file `VERSION`.
+No `VERSION` file must exist.
 
 ---
 
 # 2. Source of truth
 
-La versione di un servizio è determinata esclusivamente dai suoi tag Git.
+A service's version is determined exclusively by its Git tags.
 
-Formato:
+Format:
 
 ```text
 <service>/v<semver>
 ```
 
-Esempio:
+Example:
 
 ```text
 scraper-service/v0.1.5
@@ -37,7 +37,7 @@ api/v2.4.1
 worker/v1.8.3
 ```
 
-Internamente:
+Internally:
 
 ```text
 service = scraper-service
@@ -45,9 +45,9 @@ version = 0.1.5
 tag     = scraper-service/v0.1.5
 ```
 
-Il prefisso `v` appartiene alla convenzione del tag Git.
+The `v` prefix belongs to the Git tag convention.
 
-Il valore SemVer puro è:
+The pure SemVer value is:
 
 ```text
 0.1.5
@@ -57,19 +57,19 @@ Il valore SemVer puro è:
 
 # 3. SemVer
 
-Il tool deve utilizzare Semantic Versioning 2.0.0:
+The tool must use Semantic Versioning 2.0.0:
 
 ```text
 MAJOR.MINOR.PATCH
 ```
 
-Esempio:
+Example:
 
 ```text
 2.7.4
 ```
 
-Le operazioni previste sono:
+The supported operations are:
 
 ```text
 patch
@@ -77,7 +77,7 @@ minor
 major
 ```
 
-Esempi:
+Examples:
 
 ```text
 2.7.4 + patch -> 2.7.5
@@ -85,62 +85,62 @@ Esempi:
 2.7.4 + major -> 3.0.0
 ```
 
-Il tool non deve determinare automaticamente il tipo di bump.
+The tool must not determine the bump type automatically.
 
-La scelta tra `patch`, `minor` e `major` rimane responsabilità dell’utente o della pipeline di release.
+Choosing between `patch`, `minor` and `major` remains the responsibility of the user or of the release pipeline.
 
-Per la prima release massiva dei servizi, il comando:
+For the first bulk release of the services, the command:
 
 ```text
 releaser release --new [--version <semver>]
 ```
 
-deve creare su `HEAD` il primo tag di ogni servizio configurato che non possiede ancora un tag valido nel proprio namespace. La versione predefinita, quando `--version` non è presente, è `0.1.0`.
+must create on `HEAD` the first tag of every configured service that does not yet have a valid tag in its namespace. The default version, when `--version` is not given, is `0.1.0`.
 
-Esempio:
+Example:
 
 ```text
 releaser release --new --version 0.1.0
 ```
 
-Con i servizi `api`, `worker` e `web`, se soltanto `api` possiede già un tag valido, devono essere creati:
+With the services `api`, `worker` and `web`, if only `api` already has a valid tag, the following must be created:
 
 ```text
 worker/v0.1.0
 web/v0.1.0
 ```
 
-`api` deve essere ignorato indipendentemente dalla versione del suo tag esistente. Il comando deve essere idempotente: se tutti i servizi hanno già una release valida, non crea tag. `--new` non può essere combinato con un servizio, un bump, `--affected`, `--all`, `--root` o `--force`; può essere usato con `--dry-run` e `--push`.
+`api` must be skipped regardless of the version of its existing tag. The command must be idempotent: if all services already have a valid release, it creates no tags. `--new` cannot be combined with a service, a bump, `--affected`, `--all`, `--root` or `--force`; it can be used with `--dry-run` and `--push`.
 
 ---
 
-# 4. Libreria SemVer Go
+# 4. Go SemVer library
 
-Utilizzare:
+Use:
 
 ```text
 github.com/Masterminds/semver/v3
 ```
 
-La libreria deve essere utilizzata almeno per:
+The library must be used at least for:
 
 * parsing;
-* validazione;
-* confronto;
-* ordinamento;
-* incremento versione.
+* validation;
+* comparison;
+* sorting;
+* version bumping.
 
-Per il parsing dei numeri di versione provenienti dai tag utilizzare preferibilmente una modalità strict.
+To parse version numbers coming from tags, preferably use a strict mode.
 
-Concettualmente:
+Conceptually:
 
 ```go
 semver.StrictNewVersion("1.2.3")
 ```
 
-deve essere accettato.
+must be accepted.
 
-Valori come:
+Values such as:
 
 ```text
 1.2
@@ -149,11 +149,11 @@ v1.2
 foo
 ```
 
-non devono essere accettati come SemVer valido tramite coercion automatica.
+must not be accepted as valid SemVer through automatic coercion.
 
-Il prefisso `v` deve essere rimosso dal tag prima di passare il valore al parser SemVer.
+The `v` prefix must be stripped from the tag before passing the value to the SemVer parser.
 
-Esempio:
+Example:
 
 ```text
 api/v2.4.1
@@ -165,9 +165,9 @@ StrictNewVersion(...)
 
 ---
 
-# 5. Struttura repository
+# 5. Repository structure
 
-Esempio:
+Example:
 
 ```text
 repo/
@@ -187,21 +187,21 @@ repo/
 └── releaser.yml
 ```
 
-Il tool non deve assumere questa struttura.
+The tool must not assume this structure.
 
-Tutti i path devono essere configurabili.
+All paths must be configurable.
 
 ---
 
-# 6. Configurazione
+# 6. Configuration
 
-File predefinito:
+Default file:
 
 ```text
 releaser.yml
 ```
 
-Esempio:
+Example:
 
 ```yaml
 remote: origin
@@ -235,7 +235,7 @@ services:
       - common/logging
 ```
 
-Ogni servizio deve avere `paths` e può avere:
+Each service must have `paths` and may have:
 
 ```text
 dependencies
@@ -243,53 +243,53 @@ ignore
 vars
 ```
 
-`vars` è una mappa opzionale di chiavi e valori stringa specifica del servizio. I valori non stringa non sono validi.
+`vars` is an optional service-specific map of string keys and values. Non-string values are not valid.
 
-A livello radice sono ammessi `services`, `ignore` (sezione 31) e `remote`, il remote usato da `--push` (predefinito `origin`, sezione 28). Le chiavi sconosciute sono un errore di configurazione, così che un refuso non disattivi silenziosamente una dipendenza.
+At the root level `services`, `ignore` (section 31) and `remote` are allowed, the latter being the remote used by `--push` (default `origin`, section 28). Unknown keys are a configuration error, so that a typo does not silently disable a dependency.
 
-Il nome di un servizio deve essere utilizzabile come singolo componente di un ref Git: non può essere vuoto, contenere `/`, spazi, caratteri di controllo, `~ ^ : ? * [ \`, `..` o `@{`, iniziare con `.` o `-`, terminare con `.` o `.lock`.
+A service name must be usable as a single Git ref component: it cannot be empty, contain `/`, spaces, control characters, `~ ^ : ? * [ \`, `..` or `@{`, start with `.` or `-`, or end with `.` or `.lock`.
 
-Il file predefinito è cercato nella directory indicata da `--repo`. Un `--config` relativo passato esplicitamente è risolto rispetto alla directory corrente.
+The default file is looked up in the directory given by `--repo`. An explicitly passed relative `--config` is resolved against the current directory.
 
 ---
 
-# 7. Servizio affected
+# 7. Affected service
 
-Un servizio è `affected` quando esiste almeno una modifica non inclusa nella sua ultima release.
+A service is `affected` when there is at least one change not included in its latest release.
 
-Il confronto avviene tra:
+The comparison is between:
 
 ```text
-<ultimo tag del servizio>
+<latest tag of the service>
 ```
 
-e:
+and:
 
 ```text
 HEAD
 ```
 
-Esempio:
+Example:
 
 ```text
 api/v2.4.1..HEAD
 ```
 
-Non deve essere utilizzato:
+The following must not be used:
 
 ```text
 HEAD~1..HEAD
 ```
 
-per determinare lo stato di release.
+to determine the release state.
 
 ---
 
-# 8. Baseline indipendente per servizio
+# 8. Independent baseline per service
 
-Ogni servizio ha una propria baseline.
+Each service has its own baseline.
 
-Esempio:
+Example:
 
 ```text
 api     -> api/v2.4.1
@@ -297,7 +297,7 @@ worker  -> worker/v1.8.3
 scraper -> scraper-service/v0.1.5
 ```
 
-Il tool deve effettuare logicamente:
+The tool must logically perform:
 
 ```text
 git diff api/v2.4.1..HEAD
@@ -305,31 +305,31 @@ git diff worker/v1.8.3..HEAD
 git diff scraper-service/v0.1.5..HEAD
 ```
 
-Le baseline non sono globali.
+Baselines are not global.
 
 ---
 
-# 9. Individuazione ultima release
+# 9. Finding the latest release
 
-Per un servizio:
+For a service:
 
 ```text
 scraper-service
 ```
 
-cercare:
+look for:
 
 ```text
 scraper-service/v*
 ```
 
-Esempio:
+Example:
 
 ```bash
 git tag --list 'scraper-service/v*'
 ```
 
-Supponendo:
+Assuming:
 
 ```text
 scraper-service/v0.1.3
@@ -337,25 +337,25 @@ scraper-service/v0.1.4
 scraper-service/v0.1.5
 ```
 
-l’ultima release è:
+the latest release is:
 
 ```text
 scraper-service/v0.1.5
 ```
 
-L’ordinamento deve avvenire tramite SemVer e non lessicograficamente.
+Sorting must be done by SemVer, not lexicographically.
 
 ---
 
-# 10. Tag validi
+# 10. Valid tags
 
-Formato valido:
+Valid format:
 
 ```text
 <service>/v<semver>
 ```
 
-Esempi validi:
+Valid examples:
 
 ```text
 api/v1.0.0
@@ -363,7 +363,7 @@ api/v1.10.0
 api/v2.0.0
 ```
 
-Esempi non validi:
+Invalid examples:
 
 ```text
 api/v1
@@ -373,9 +373,9 @@ api/v01.2.3
 api/foo
 ```
 
-Sono validi anche prerelease e build metadata secondo SemVer 2.0.0, per esempio `api/v2.1.0-rc.1` o `api/v1.0.0+build.5`.
+Prereleases and build metadata according to SemVer 2.0.0 are also valid, for example `api/v2.1.0-rc.1` or `api/v1.0.0+build.5`.
 
-Le prerelease partecipano all'ordinamento SemVer: `2.1.0-rc.1` precede `2.1.0` ma segue `2.0.0`. Se è la versione più alta, una prerelease è l'ultima release del servizio e viene restituita da `version-number` e `version-tag`. Il bump da una prerelease segue la libreria SemVer:
+Prereleases take part in SemVer ordering: `2.1.0-rc.1` precedes `2.1.0` but follows `2.0.0`. If it is the highest version, a prerelease is the service's latest release and is returned by `version-number` and `version-tag`. Bumping from a prerelease follows the SemVer library:
 
 ```text
 2.1.0-rc.1 + patch -> 2.1.0
@@ -383,23 +383,23 @@ Le prerelease partecipano all'ordinamento SemVer: `2.1.0-rc.1` precede `2.1.0` m
 2.1.0-rc.1 + major -> 3.0.0
 ```
 
-Il build metadata non influisce sull'ordinamento: `1.0.0+a` e `1.0.0` hanno la stessa precedenza.
+Build metadata does not affect ordering: `1.0.0+a` and `1.0.0` have the same precedence.
 
-I tag malformati possono essere ignorati normalmente e segnalati con warning in modalità verbose.
+Malformed tags can normally be ignored and reported with a warning in verbose mode.
 
-Una futura modalità `--strict-tags` può considerarli errori.
+A future `--strict-tags` mode may treat them as errors.
 
 ---
 
-# 11. Comando `version-number`
+# 11. `version-number` command
 
-Sintassi:
+Syntax:
 
 ```bash
 releaser version-number <service>
 ```
 
-Esempio:
+Example:
 
 ```bash
 releaser version-number scraper-service
@@ -411,23 +411,23 @@ Output:
 0.1.5
 ```
 
-Se l’ultimo tag è:
+If the latest tag is:
 
 ```text
 scraper-service/v0.1.5
 ```
 
-il comando restituisce esclusivamente:
+the command returns only:
 
 ```text
 0.1.5
 ```
 
-Nessun testo aggiuntivo deve essere scritto su `stdout`.
+No additional text must be written to `stdout`.
 
-Questo comando è progettato per scripting e CI/CD.
+This command is designed for scripting and CI/CD.
 
-Esempio:
+Example:
 
 ```bash
 VERSION=$(releaser version-number scraper-service)
@@ -435,17 +435,17 @@ VERSION=$(releaser version-number scraper-service)
 
 ---
 
-# 11.1 Comando `get-var`
+# 11.1 `get-var` command
 
-Sintassi:
+Syntax:
 
 ```bash
 releaser get-var <service> <key>
 ```
 
-Il comando legge il valore dalla sezione `vars` del servizio e lo scrive da solo su `stdout`, con newline finale consentita. Non richiede che la directory indicata da `--repo` sia un repository Git.
+The command reads the value from the service's `vars` section and writes it alone to `stdout`, a trailing newline being allowed. It does not require the directory given by `--repo` to be a Git repository.
 
-Esempio:
+Example:
 
 ```bash
 releaser get-var api image
@@ -457,60 +457,60 @@ Output:
 registry.example.com/project/api
 ```
 
-Servizio o chiave inesistenti producono un errore e un exit code non zero. Il comando è side-effect free ed è adatto a script e pipeline.
+A non-existent service or key produces an error and a non-zero exit code. The command is side-effect free and suitable for scripts and pipelines.
 
 ---
 
-# 11.2 Comando `run`
+# 11.2 `run` command
 
-Sintassi:
+Syntax:
 
 ```bash
 releaser run [service] <script> [--affected] [-- args...]
 ```
 
-Esegue `<script>` una volta per ogni servizio configurato, in ordine alfabetico. Con `service` lo esegue solo per quel servizio; con `--affected` solo per i servizi affected (non combinabile con `service`). Gli argomenti dopo `--` sono passati allo script.
+Runs `<script>` once for each configured service, in alphabetical order. With `service` it runs only for that service; with `--affected` only for the affected services (cannot be combined with `service`). Arguments after `--` are passed to the script.
 
-Ad ogni esecuzione l'ambiente ereditato è esteso con:
+On each run the inherited environment is extended with:
 
-* `RELEASER_NAME`: nome del servizio;
-* `RELEASER_PATHS`: `paths` separati da spazio;
-* `RELEASER_DEPS`: `dependencies` separate da spazio, vuota se assenti;
-* `RELEASER_VERSION`: ultima versione rilasciata del servizio, senza prefisso `v`;
-* `RELEASER_TAG`: tag dell'ultima release;
-* `RELEASER_VAR_<KEY>`: una per chiave di `vars`, con `<KEY>` in maiuscolo e `-` sostituito da `_`.
+* `RELEASER_NAME`: service name;
+* `RELEASER_PATHS`: space-separated `paths`;
+* `RELEASER_DEPS`: space-separated `dependencies`, empty if none;
+* `RELEASER_VERSION`: latest released version of the service, without the `v` prefix;
+* `RELEASER_TAG`: tag of the latest release;
+* `RELEASER_VAR_<KEY>`: one per `vars` key, with `<KEY>` uppercased and `-` replaced by `_`.
 
-Eventuali variabili con gli stessi nomi presenti nell'ambiente di `releaser` non sono ereditate. Prima di eseguire qualsiasi script, le variabili di tutti i servizi selezionati sono validate: una chiave che non produce un nome composto solo da `A-Z`, `0-9` e `_`, due chiavi che producono lo stesso nome o un path contenente spazi producono un errore con exit code `2`.
+Any variables with the same names present in `releaser`'s environment are not inherited. Before running any script, the variables of all selected services are validated: a key that does not produce a name made only of `A-Z`, `0-9` and `_`, two keys that produce the same name or a path containing spaces produce an error with exit code `2`.
 
-Lo script è eseguito dalla directory `--repo`. Se `<script>` esiste come file rispetto alla directory corrente è eseguito tramite il suo path assoluto, altrimenti è cercato nel `PATH`. Stdin, stdout e stderr sono ereditati; prima di ogni esecuzione è scritta su stderr la riga `==> <service>`.
+The script runs from the `--repo` directory. If `<script>` exists as a file relative to the current directory it is executed through its absolute path, otherwise it is looked up in the `PATH`. Stdin, stdout and stderr are inherited; before each run the line `==> <service>` is written to stderr.
 
-L'esecuzione si ferma al primo fallimento: `releaser` termina con l'exit code dello script, oppure `1` se lo script non può essere avviato o termina per un segnale. `RELEASER_VERSION` e `RELEASER_TAG` sono vuote se il servizio non ha release o se `--repo` non è un repository Git; solo `--affected` richiede un repository Git.
+Execution stops at the first failure: `releaser` exits with the script's exit code, or `1` if the script cannot be started or is terminated by a signal. `RELEASER_VERSION` and `RELEASER_TAG` are empty if the service has no release or if `--repo` is not a Git repository; only `--affected` requires a Git repository.
 
 ---
 
-# 11.3 Comando `template`
+# 11.3 `template` command
 
-Sintassi:
+Syntax:
 
 ```bash
 releaser template [service] <file> [-o|--output <path-template>]
 ```
 
-Esegue il template Go (`text/template`, opzione `missingkey=error`) contenuto in `<file>` una volta per ogni servizio configurato, in ordine alfabetico, oppure solo per `service`. Il template riceve i campi `.Name`, `.Paths`, `.Deps` (liste), `.Version`, `.Tag` (stringhe vuote se il servizio non ha release o se `--repo` non è un repository Git) e `.Vars` (mappa delle `vars`, vuota se assenti, con ogni `-` delle chiavi sostituito da `_`, così che `docker-file` sia accessibile come `.Vars.docker_file`; due chiavi che producono lo stesso nome sono un errore di configurazione con exit code `2`). L'accesso a una chiave inesistente di `.Vars` con la sintassi `.Vars.key` è un errore.
+Executes the Go template (`text/template`, option `missingkey=error`) contained in `<file>` once for each configured service, in alphabetical order, or only for `service`. The template receives the fields `.Name`, `.Paths`, `.Deps` (lists), `.Version`, `.Tag` (empty strings if the service has no release or if `--repo` is not a Git repository) and `.Vars` (map of `vars`, empty if none, with every `-` in the keys replaced by `_`, so that `docker-file` is accessible as `.Vars.docker_file`; two keys that produce the same name are a configuration error with exit code `2`). Accessing a non-existent `.Vars` key with the `.Vars.key` syntax is an error.
 
-Senza `--output` l'output di tutti i servizi è scritto su stdout, concatenato. Con `--output` il valore è a sua volta un template eseguito con gli stessi dati, che produce il path del file del servizio; due servizi che producono lo stesso path, o un path vuoto, sono un errore. Le directory mancanti sono create, i file esistenti sovrascritti, e su stdout è scritto un path per riga. Tutti i servizi sono renderizzati prima di scrivere qualsiasi output: un errore non lascia output parziale. Gli errori di lettura, parsing o esecuzione del template producono exit code `1`.
+Without `--output`, the output of all services is written to stdout, concatenated. With `--output`, the value is itself a template executed with the same data, which produces the path of the service's file; two services producing the same path, or an empty path, are an error. Missing directories are created, existing files are overwritten, and one path per line is written to stdout. All services are rendered before any output is written: an error leaves no partial output. Template read, parse or execution errors produce exit code `1`.
 
 ---
 
-# 12. Comando `version-tag`
+# 12. `version-tag` command
 
-Sintassi:
+Syntax:
 
 ```bash
 releaser version-tag <service>
 ```
 
-Esempio:
+Example:
 
 ```bash
 releaser version-tag scraper-service
@@ -522,19 +522,19 @@ Output:
 scraper-service/v0.1.5
 ```
 
-Anche in questo caso `stdout` deve contenere esclusivamente il valore.
+Here too, `stdout` must contain only the value.
 
 ---
 
-# 13. Comando `next-version-number`
+# 13. `next-version-number` command
 
-Sintassi:
+Syntax:
 
 ```bash
 releaser next-version-number <service> <patch|minor|major>
 ```
 
-Esempio:
+Example:
 
 ```bash
 releaser next-version-number scraper-service patch
@@ -546,7 +546,7 @@ Output:
 0.1.6
 ```
 
-Altri esempi:
+Other examples:
 
 ```bash
 releaser next-version-number scraper-service minor
@@ -568,19 +568,19 @@ Output:
 1.0.0
 ```
 
-Il comando deve essere side-effect free.
+The command must be side-effect free.
 
 ---
 
-# 14. Comando `next-version-tag`
+# 14. `next-version-tag` command
 
-Sintassi:
+Syntax:
 
 ```bash
 releaser next-version-tag <service> <patch|minor|major>
 ```
 
-Esempio:
+Example:
 
 ```bash
 releaser next-version-tag scraper-service patch
@@ -592,19 +592,19 @@ Output:
 scraper-service/v0.1.6
 ```
 
-Il comando non deve creare il tag.
+The command must not create the tag.
 
 ---
 
-# 15. Rimozione comando `next`
+# 15. Removal of the `next` command
 
-Non deve esistere il comando generico:
+The generic command must not exist:
 
 ```text
 releaser next
 ```
 
-Per ottenere versioni e tag la CLI deve esporre esclusivamente:
+To obtain versions and tags, the CLI must expose only:
 
 ```text
 version-number
@@ -613,13 +613,13 @@ next-version-number
 next-version-tag
 ```
 
-Questo evita ambiguità sul formato restituito. L'elenco completo dei comandi è nella sezione 42.
+This avoids ambiguity about the returned format. The full list of commands is in section 42.
 
 ---
 
-# 16. Output dei comandi versione
+# 16. Output of the version commands
 
-I quattro comandi:
+The four commands:
 
 ```text
 version-number
@@ -628,38 +628,38 @@ next-version-number
 next-version-tag
 ```
 
-devono essere primitive da scripting.
+must be scripting primitives.
 
-Regole:
+Rules:
 
-* valore su `stdout`;
-* errori su `stderr`;
-* nessuna intestazione;
-* nessuna decorazione;
-* nessun prefisso descrittivo;
-* newline finale consentita;
-* `exit 0` in caso di successo;
-* exit code non zero in caso di errore.
+* value on `stdout`;
+* errors on `stderr`;
+* no header;
+* no decoration;
+* no descriptive prefix;
+* trailing newline allowed;
+* `exit 0` on success;
+* non-zero exit code on error.
 
-Esempio:
+Example:
 
 ```bash
 IMAGE_TAG=$(releaser version-number api)
 ```
 
-deve funzionare senza `awk`, `sed`, `grep` o `cut`.
+must work without `awk`, `sed`, `grep` or `cut`.
 
 ---
 
-# 17. Servizio senza release
+# 17. Service without a release
 
-Se non esistono tag per un servizio:
+If no tags exist for a service:
 
 ```bash
 releaser version-number new-service
 ```
 
-deve fallire.
+must fail.
 
 `stderr`:
 
@@ -673,7 +673,7 @@ Exit code:
 1
 ```
 
-Lo stesso vale per:
+The same applies to:
 
 ```text
 version-tag
@@ -681,13 +681,13 @@ next-version-number
 next-version-tag
 ```
 
-perché non esiste una versione precedente da incrementare.
+because there is no previous version to bump.
 
-Il bootstrap viene gestito tramite release con versione esplicita.
+Bootstrap is handled through a release with an explicit version.
 
 ---
 
-# 18. Comando `status`
+# 18. `status` command
 
 ```bash
 releaser status
@@ -702,7 +702,7 @@ worker            1.8.3           no
 scraper-service   0.1.5           yes
 ```
 
-Singolo servizio:
+Single service:
 
 ```bash
 releaser status scraper-service
@@ -710,13 +710,13 @@ releaser status scraper-service
 
 ---
 
-# 19. Status verbose
+# 19. Verbose status
 
 ```bash
 releaser status scraper-service --verbose
 ```
 
-Esempio:
+Example:
 
 ```text
 Service: scraper-service
@@ -738,7 +738,7 @@ Affected:
 
 ---
 
-# 20. Comando `affected`
+# 20. `affected` command
 
 ```bash
 releaser affected
@@ -751,11 +751,11 @@ api
 scraper-service
 ```
 
-Deve restituire esclusivamente i servizi affected.
+It must return only the affected services.
 
 ---
 
-# 21. Comando `changes`
+# 21. `changes` command
 
 ```bash
 releaser changes scraper-service
@@ -768,17 +768,17 @@ services/scraper/parser.go
 common/http/client.go
 ```
 
-Deve mostrare esclusivamente i file che rendono affected il servizio.
+It must show only the files that make the service affected.
 
 ---
 
-# 22. Comando `plan`
+# 22. `plan` command
 
 ```bash
 releaser plan
 ```
 
-Esempio:
+Example:
 
 ```text
 SERVICE           VERSION    AFFECTED    FILES
@@ -787,13 +787,13 @@ worker            1.8.3      no          0
 scraper-service   0.1.5      yes         2
 ```
 
-Supportare:
+Support:
 
 ```bash
 releaser plan --format json
 ```
 
-Esempio:
+Example:
 
 ```json
 {
@@ -811,114 +811,114 @@ Esempio:
 
 ---
 
-# 23. Comando `release`
+# 23. `release` command
 
-Sintassi:
+Syntax:
 
 ```bash
 releaser release <service> <patch|minor|major>
 ```
 
-Esempio:
+Example:
 
 ```bash
 releaser release scraper-service patch
 ```
 
-Con ultima release:
+With latest release:
 
 ```text
 scraper-service/v0.1.5
 ```
 
-calcola:
+it computes:
 
 ```text
 0.1.6
 ```
 
-e crea:
+and creates:
 
 ```text
 scraper-service/v0.1.6
 ```
 
-sul commit corrente.
+on the current commit.
 
-Il comando deve verificare lo stato affected del servizio prima del dry-run o della creazione del tag. Se il servizio non è affected deve terminare con exit code `1` e un errore, senza creare alcun tag.
+The command must check the service's affected state before the dry-run or the tag creation. If the service is not affected it must exit with exit code `1` and an error, without creating any tag.
 
-Per consentire esplicitamente una release priva di modifiche rilevanti, supportare:
+To explicitly allow a release without relevant changes, support:
 
 ```bash
 releaser release scraper-service patch --force
 ```
 
-`--force` ignora esclusivamente il controllo affected e quello sulla versione esplicita non maggiore dell'ultima (sezione 24); restano valide tutte le altre verifiche, inclusi validità della versione, unicità del tag e working tree pulita.
+`--force` bypasses only the affected check and the check on an explicit version not greater than the latest one (section 24); all other checks still apply, including version validity, tag uniqueness and a clean working tree.
 
-## 23.1 Release in blocco
+## 23.1 Bulk release
 
-Per rilasciare con lo stesso bump tutti i servizi affected:
+To release all affected services with the same bump:
 
 ```bash
 releaser release --affected <patch|minor|major>
 ```
 
-Per rilasciare tutti i servizi configurati, anche se non affected:
+To release all configured services, even if not affected:
 
 ```bash
 releaser release --all --force <patch|minor|major>
 ```
 
-`--affected` e `--all` sono mutuamente esclusivi. `--all` richiede sempre `--force`, così il superamento del controllo affected rimane esplicito. Le modalità `--affected` e `--all` non supportano `--version`: ciascun servizio deve avere una release precedente dalla quale calcolare il bump. L'unica modalità bulk che accetta `--version` è `--new` (sezione 3), che riguarda solo servizi mai rilasciati.
+`--affected` and `--all` are mutually exclusive. `--all` always requires `--force`, so that bypassing the affected check stays explicit. The `--affected` and `--all` modes do not support `--version`: each service must have a previous release from which to compute the bump. The only bulk mode that accepts `--version` is `--new` (section 3), which concerns only services that have never been released.
 
-Prima di creare il primo tag, il comando deve validare l'intero batch: configurazione dei servizi, stato della history, bump, presenza di una release precedente, unicità di tutti i nuovi tag e working tree pulita. Un errore di validazione non deve quindi lasciare tag parziali. L'ordine di elaborazione è quello alfabetico dei servizi. `--dry-run` deve mostrare tutti i tag senza modificarli; `--push` deve pubblicare tutti i tag creati sul remote configurato con un unico push atomico (`git push --atomic`). Se la creazione di un tag o il push falliscono, i tag locali creati dal comando devono essere eliminati: il comando non lascia release parziali né in locale né sul remote e può essere rilanciato.
+Before creating the first tag, the command must validate the whole batch: service configuration, history state, bump, presence of a previous release, uniqueness of all new tags and a clean working tree. A validation error must therefore not leave partial tags. Processing order is the alphabetical order of the services. `--dry-run` must show all tags without modifying them; `--push` must publish all created tags to the configured remote with a single atomic push (`git push --atomic`). If creating a tag or the push fails, the local tags created by the command must be deleted: the command leaves no partial releases either locally or on the remote and can be rerun.
 
-## 23.2 Release della root di un repository standard
+## 23.2 Releasing the root of a standard repository
 
-Per repository non monorepo, la release opera sull'intera root senza caricare né richiedere `releaser.yml`:
+For non-monorepo repositories, the release operates on the whole root without loading or requiring `releaser.yml`:
 
 ```bash
 releaser release --root <patch|minor|major> [--dry-run] [--push]
 releaser release --root --version <Initial SemVer> [--dry-run] [--push]
 ```
 
-Il tag ha forma `<prefix>v<semver>`. Il prefix predefinito viene dedotto dai tag release precedenti; nella deduzione un prefix è valido solo se vuoto o se termina con un separatore (`/`, `-`, `_`, `.`), così che tag come `dev1.0.0` non siano interpretati come release con prefix `de`. In assenza di release il prefix è vuoto e produce, per esempio, `v0.1.5`. `--prefix=''` richiede esplicitamente un prefix vuoto. Se i tag release individuati hanno prefix eterogenei, il comando deve fallire e rendere obbligatorio `--prefix`.
+The tag has the form `<prefix>v<semver>`. The default prefix is inferred from previous release tags; during inference a prefix is valid only if it is empty or ends with a separator (`/`, `-`, `_`, `.`), so that tags such as `dev1.0.0` are not interpreted as releases with prefix `de`. With no releases the prefix is empty and produces, for example, `v0.1.5`. `--prefix=''` explicitly requests an empty prefix. If the release tags found have mixed prefixes, the command must fail and make `--prefix` mandatory.
 
-Il bump richiede una release precedente; il bootstrap usa `--version` e una SemVer strict. Come nella sezione 24, una `--version` non maggiore dell'ultima release richiede `--force`. Se non esistono modifiche tra il tag precedente selezionato e `HEAD`, il comando fallisce salvo uso esplicito di `--force`. Restano obbligatorie l'ascendenza del tag, l'unicità del nuovo tag e la working tree pulita. `--dry-run` non crea tag; `--push` pubblica il tag su `origin`.
+A bump requires a previous release; bootstrap uses `--version` and a strict SemVer. As in section 24, a `--version` not greater than the latest release requires `--force`. If there are no changes between the selected previous tag and `HEAD`, the command fails unless `--force` is used explicitly. Tag ancestry, uniqueness of the new tag and a clean working tree remain mandatory. `--dry-run` creates no tags; `--push` publishes the tag to `origin`.
 
-`--root`, `--affected` e `--all` sono modalità mutuamente esclusive.
+`--root`, `--affected` and `--all` are mutually exclusive modes.
 
 ---
 
-# 24. Release con versione esplicita
+# 24. Release with an explicit version
 
-Supportare:
+Support:
 
 ```bash
 releaser release new-service --version 1.0.0
 ```
 
-Serve principalmente per:
+It is mainly meant for:
 
 * bootstrap;
-* migrazione di repository esistenti;
-* casi amministrativi.
+* migration of existing repositories;
+* administrative cases.
 
-La versione esplicita deve essere validata tramite SemVer strict.
+The explicit version must be validated through strict SemVer.
 
-Se il servizio ha già una release, la versione esplicita deve essere strettamente maggiore dell'ultima; altrimenti il comando fallisce con exit code `1`. Con `--force` il tag viene creato comunque (per esempio per ricostruire un tag mancante nella history), ma non diventa l'ultima release, perché questa è sempre la versione SemVer più alta: non è quindi possibile un "reset" verso una versione inferiore.
+If the service already has a release, the explicit version must be strictly greater than the latest one; otherwise the command fails with exit code `1`. With `--force` the tag is created anyway (for example to rebuild a tag missing from the history), but it does not become the latest release, because that is always the highest SemVer version: a "reset" to a lower version is therefore not possible.
 
 ---
 
 # 25. Bootstrap
 
-Servizio senza tag:
+Service without tags:
 
 ```text
 new-service
 ```
 
-`status new-service --verbose`, con lo stesso formato della sezione 19:
+`status new-service --verbose`, with the same format as section 19:
 
 ```text
 Service: new-service
@@ -935,21 +935,21 @@ Affected:
   yes
 ```
 
-Nella tabella di `status` e `plan` la versione compare come `none`; in `plan --format json` `lastVersion` e `lastTag` sono `null`.
+In the `status` and `plan` tables the version appears as `none`; in `plan --format json` `lastVersion` and `lastTag` are `null`.
 
-Prima release:
+First release:
 
 ```bash
 releaser release new-service --version 0.1.0
 ```
 
-oppure:
+or:
 
 ```bash
 releaser release new-service --version 1.0.0
 ```
 
-Da quel momento diventano disponibili:
+From then on, the following become available:
 
 ```text
 version-number
@@ -982,17 +982,17 @@ No changes have been made.
 
 ---
 
-# 27. Creazione tag
+# 27. Tag creation
 
-Preferire tag annotati.
+Prefer annotated tags.
 
-Esempio:
+Example:
 
 ```text
 scraper-service/v0.2.0
 ```
 
-Messaggio:
+Message:
 
 ```text
 Release scraper-service v0.2.0
@@ -1000,29 +1000,29 @@ Release scraper-service v0.2.0
 
 ---
 
-# 28. Push tag
+# 28. Pushing tags
 
-Opzionalmente:
+Optionally:
 
 ```bash
 releaser release scraper-service patch --push
 ```
 
-Remote predefinito:
+Default remote:
 
 ```text
 origin
 ```
 
-Configurabile tramite la chiave `remote` di `releaser.yml` (sezione 6). `release --root` non legge la configurazione e usa sempre `origin`.
+Configurable through the `remote` key of `releaser.yml` (section 6). `release --root` does not read the configuration and always uses `origin`.
 
-Il tool non deve fare push implicito senza flag.
+The tool must not push implicitly without the flag.
 
 ---
 
 # 29. Common
 
-Esempio:
+Example:
 
 ```text
 common/logging
@@ -1032,21 +1032,21 @@ common/logging
       └── scraper-service
 ```
 
-Se cambia:
+If this changes:
 
 ```text
 common/logging/logger.go
 ```
 
-tutti e tre possono risultare affected.
+all three may become affected.
 
-La verifica deve però essere fatta rispetto alla baseline specifica di ogni servizio.
+The check must, however, be done against each service's specific baseline.
 
 ---
 
-# 30. Esempio baseline indipendenti
+# 30. Independent baselines example
 
-Cronologia:
+History:
 
 ```text
 A -- B -- C -- D -- E
@@ -1055,27 +1055,27 @@ A -- B -- C -- D -- E
           worker/v1.8.3
 ```
 
-Se `common/logging` è cambiato in `C`:
+If `common/logging` changed in `C`:
 
 ```text
 api
 ```
 
-può risultare affected perché la modifica è successiva alla sua release.
+may be affected because the change comes after its release.
 
 ```text
 worker
 ```
 
-può risultare clean perché la modifica è già inclusa nel tag `worker/v1.8.3`.
+may be clean because the change is already included in the `worker/v1.8.3` tag.
 
-Quindi ogni servizio deve essere valutato separatamente.
+So each service must be evaluated separately.
 
 ---
 
 # 31. Ignore
 
-Configurazione globale:
+Global configuration:
 
 ```yaml
 ignore:
@@ -1083,7 +1083,7 @@ ignore:
   - "**/*.md"
 ```
 
-Configurazione per servizio:
+Per-service configuration:
 
 ```yaml
 services:
@@ -1095,36 +1095,36 @@ services:
       - services/api/docs/**
 ```
 
-I pattern sono relativi alla root del repository e supportano:
+Patterns are relative to the repository root and support:
 
-* `**`: qualsiasi numero di directory, anche nessuna;
-* `*`: qualsiasi sequenza di caratteri all'interno di un segmento di path;
-* `?`: un singolo carattere all'interno di un segmento di path.
+* `**`: any number of directories, including none;
+* `*`: any sequence of characters within a path segment;
+* `?`: a single character within a path segment.
 
-Tutti gli altri caratteri, incluse le parentesi quadre, sono letterali. L'ignore globale e quello del servizio si sommano.
+All other characters, including square brackets, are literal. The global ignore and the service ignore are combined.
 
 ---
 
-# 32. Rename e delete
+# 32. Rename and delete
 
-Il detector deve gestire:
+The detector must handle:
 
 * added;
 * modified;
 * deleted;
 * renamed.
 
-Un file eliminato può rendere affected il servizio.
+A deleted file can make the service affected.
 
-Per un rename devono essere valutati sia path precedente sia path nuovo. Ciascun path è rilevante se appartiene a `paths` o `dependencies` del servizio e non è ignorato; il servizio è affected se almeno uno dei due è rilevante, e `changes` riporta soltanto i path rilevanti.
+For a rename, both the old path and the new path must be evaluated. Each path is relevant if it belongs to the service's `paths` or `dependencies` and is not ignored; the service is affected if at least one of the two is relevant, and `changes` reports only the relevant paths.
 
-I path devono essere letti in modo non ambiguo (per esempio `git diff-tree -z`), così che nomi con caratteri non ASCII, spazi o virgolette non vengano alterati dal quoting di Git.
+Paths must be read unambiguously (for example with `git diff-tree -z`), so that names with non-ASCII characters, spaces or quotes are not altered by Git's quoting.
 
 ---
 
 # 33. Working tree
 
-Comandi read-only:
+Read-only commands:
 
 ```text
 status
@@ -1137,45 +1137,45 @@ next-version-number
 next-version-tag
 ```
 
-devono operare su:
+must operate on:
 
 ```text
 HEAD
 ```
 
-e ignorare modifiche non committate.
+and ignore uncommitted changes.
 
-Il comando:
+The command:
 
 ```text
 release
 ```
 
-deve richiedere working tree pulito: nessuna modifica, staged o no, ai file tracciati. I file non tracciati non bloccano la release, perché non possono far parte del tag creato su `HEAD` (per esempio artefatti scaricati in CI).
+must require a clean working tree: no changes, staged or not, to tracked files. Untracked files do not block the release, because they cannot be part of the tag created on `HEAD` (for example artifacts downloaded in CI).
 
 ---
 
 # 34. Detached HEAD
 
-Il tool deve funzionare correttamente in detached HEAD.
+The tool must work correctly in detached HEAD.
 
-Questo è fondamentale per CI/CD.
+This is essential for CI/CD.
 
 ---
 
 # 35. Shallow clone
 
-Se la history necessaria non è disponibile, il tool deve fallire esplicitamente.
+If the required history is not available, the tool must fail explicitly.
 
-Non deve produrre silenziosamente un risultato `affected` potenzialmente errato.
+It must not silently produce a potentially wrong `affected` result.
 
-In particolare, se in una shallow clone un tag non risulta antenato di `HEAD`, l'errore deve indicare la history mancante (exit code `3`) e non un tag divergente.
+In particular, if in a shallow clone a tag is not an ancestor of `HEAD`, the error must indicate missing history (exit code `3`) and not a diverging tag.
 
 ---
 
-# 36. Nessuna rete implicita
+# 36. No implicit network access
 
-Il tool non deve eseguire automaticamente:
+The tool must not automatically run:
 
 ```text
 git fetch
@@ -1184,23 +1184,23 @@ git pull
 git push
 ```
 
-eccetto `push` quando esplicitamente richiesto tramite flag.
+except `push` when explicitly requested through a flag.
 
-La pipeline è responsabile di fornire history e tag sufficienti.
+The pipeline is responsible for providing sufficient history and tags.
 
 ---
 
-# 37. Exit code
+# 37. Exit codes
 
 ```text
-0 = successo
-1 = validazione negativa / stato non disponibile
-2 = errore configurazione
-3 = errore Git
-4 = errore interno (riservato, attualmente non utilizzato)
+0 = success
+1 = validation failure / state not available
+2 = configuration error
+3 = Git error
+4 = internal error (reserved, currently unused)
 ```
 
-Rientrano nel codice `1` anche argomenti o flag CLI non validi, servizio sconosciuto, variabile sconosciuta, bump non valido e servizio senza release. Rientrano nel codice `2` file di configurazione mancante, YAML non valido, chiavi sconosciute e nomi o path non validi. Rientrano nel codice `3` repository non valido, history incompleta e comandi Git falliti, incluso il push.
+Code `1` also covers invalid CLI arguments or flags, unknown service, unknown variable, invalid bump and service without a release. Code `2` covers a missing configuration file, invalid YAML, unknown keys and invalid names or paths. Code `3` covers an invalid repository, incomplete history and failed Git commands, including push.
 
 ---
 
@@ -1212,7 +1212,7 @@ Default:
 {{service}}/v{{version}}
 ```
 
-Internamente separare:
+Internally keep separate:
 
 ```text
 service
@@ -1220,21 +1220,21 @@ version
 tag
 ```
 
-Non memorizzare mai:
+Never store:
 
 ```text
 v0.1.5
 ```
 
-come valore SemVer.
+as a SemVer value.
 
-La `v` è responsabilità esclusiva del formatter del tag.
+The `v` is the sole responsibility of the tag formatter.
 
 ---
 
-# 39. Architettura Go
+# 39. Go architecture
 
-Struttura suggerita:
+Suggested structure:
 
 ```text
 cmd/
@@ -1253,25 +1253,25 @@ internal/
 
 ---
 
-# 40. Package `version`
+# 40. `version` package
 
-Il package interno:
+The internal package:
 
 ```text
 internal/version
 ```
 
-(chiamato `version` e non `semver` per non confondersi con la libreria che incapsula)
+(named `version` rather than `semver` to avoid confusion with the library it wraps)
 
-deve fare da wrapper alla libreria:
+must act as a wrapper around the library:
 
 ```text
 github.com/Masterminds/semver/v3
 ```
 
-Il resto dell’applicazione non deve dipendere direttamente dalla libreria esterna.
+The rest of the application must not depend directly on the external library.
 
-API interna indicativa:
+Indicative internal API:
 
 ```go
 type Version struct {
@@ -1287,19 +1287,19 @@ func (v Version) BumpMinor() Version
 func (v Version) BumpMajor() Version
 ```
 
-Questo permette di sostituire la libreria in futuro senza modificare il resto del tool.
+This makes it possible to replace the library in the future without changing the rest of the tool.
 
 ---
 
 # 41. Git abstraction
 
-Utilizzare Git installato sul sistema tramite:
+Use the Git installed on the system through:
 
 ```go
 os/exec
 ```
 
-Interfaccia indicativa:
+Indicative interface:
 
 ```go
 type Git interface {
@@ -1319,7 +1319,7 @@ type Git interface {
 
     DeleteTag(tag string) error
 
-    PushTags(remote string, tags ...string) error // push atomico
+    PushTags(remote string, tags ...string) error // atomic push
 }
 ```
 
@@ -1327,9 +1327,9 @@ type Git interface {
 
 # 42. CLI
 
-Preferire **Cobra** per i subcommand.
+Prefer **Cobra** for subcommands.
 
-Comandi previsti:
+Planned commands:
 
 ```text
 releaser status
@@ -1349,7 +1349,7 @@ releaser release
 releaser config check
 ```
 
-Non deve esistere:
+The following must not exist:
 
 ```text
 releaser next
@@ -1357,9 +1357,9 @@ releaser next
 
 ---
 
-# 43. Dipendenze esterne
+# 43. External dependencies
 
-Dipendenze previste:
+Planned dependencies:
 
 ```text
 Cobra
@@ -1367,20 +1367,20 @@ YAML parser
 Masterminds/semver/v3
 ```
 
-Git viene invocato tramite CLI.
+Git is invoked through its CLI.
 
-Obiettivo:
+Goal:
 
 ```text
-singolo binario
-nessuna dipendenza runtime oltre a Git
+single binary
+no runtime dependencies other than Git
 ```
 
 ---
 
 # 44. CI/CD
 
-Esempio:
+Example:
 
 ```bash
 VERSION=$(releaser version-number scraper-service)
@@ -1394,13 +1394,13 @@ docker build \
   services/scraper
 ```
 
-Oppure:
+Or:
 
 ```bash
 NEXT_VERSION=$(releaser next-version-number scraper-service patch)
 ```
 
-Oppure:
+Or:
 
 ```bash
 TAG=$(releaser version-tag scraper-service)
@@ -1408,9 +1408,9 @@ TAG=$(releaser version-tag scraper-service)
 
 ---
 
-# 45. Nessun build e deploy implicito
+# 45. No implicit build and deploy
 
-Il tool gestisce:
+The tool handles:
 
 ```text
 Git
@@ -1419,7 +1419,7 @@ affected detection
 release tagging
 ```
 
-Non gestisce:
+It does not handle:
 
 ```text
 Docker build
@@ -1433,13 +1433,13 @@ Helm
 OpenShift
 ```
 
-Rimane completamente polyglot.
+It stays completely polyglot.
 
 ---
 
-# 46. Nessun file VERSION
+# 46. No VERSION file
 
-Non devono essere utilizzati file:
+Files such as:
 
 ```text
 VERSION
@@ -1447,32 +1447,32 @@ version.txt
 .release-version
 ```
 
-o equivalenti.
+or equivalents must not be used.
 
-La versione esiste solo come proprietà della release Git.
+The version exists only as a property of the Git release.
 
-Questo elimina problemi di sincronizzazione tra:
+This removes synchronization problems between:
 
 ```text
-file locale
-tag Git
-artefatto pubblicato
+local file
+Git tag
+published artifact
 ```
 
 ---
 
-# 47. Invariante principale
+# 47. Main invariant
 
-Per ogni servizio:
+For each service:
 
 ```text
 service
    ↓
-trova ultimo <service>/v*
+find latest <service>/v*
    ↓
 parse SemVer
    ↓
-ultima release
+latest release
    ↓
 diff tag..HEAD
    ↓
@@ -1481,7 +1481,7 @@ paths + dependencies
 affected
 ```
 
-Per ottenere la versione:
+To get the version:
 
 ```text
 version-number
@@ -1489,7 +1489,7 @@ version-number
 0.1.5
 ```
 
-Per ottenere il tag:
+To get the tag:
 
 ```text
 version-tag
@@ -1497,7 +1497,7 @@ version-tag
 scraper-service/v0.1.5
 ```
 
-Per calcolare la prossima versione:
+To compute the next version:
 
 ```text
 next-version-number scraper-service patch
@@ -1505,7 +1505,7 @@ next-version-number scraper-service patch
 0.1.6
 ```
 
-Per calcolare il prossimo tag:
+To compute the next tag:
 
 ```text
 next-version-tag scraper-service patch
@@ -1515,18 +1515,18 @@ scraper-service/v0.1.6
 
 ---
 
-# 48. Filosofia finale
+# 48. Final philosophy
 
-Il modello deve rimanere:
+The model must remain:
 
 ```text
 Git history
     =
-stato del codice
+state of the code
 
-Git tag namespacizzato
+namespaced Git tag
     =
-release del microservizio
+microservice release
 
 releaser.yml
     =
@@ -1534,17 +1534,17 @@ dependency graph
 
 SemVer
     =
-identità e significato della release
+identity and meaning of the release
 ```
 
-Un monorepo condivide la storia Git, ma non necessariamente il lifecycle di release.
+A monorepo shares its Git history, but not necessarily its release lifecycle.
 
-Ogni servizio mantiene:
+Each service keeps:
 
-* versione indipendente;
-* tag indipendenti;
-* release indipendenti;
-* build indipendente;
-* deployment indipendente.
+* an independent version;
+* independent tags;
+* independent releases;
+* an independent build;
+* an independent deployment.
 
-Il tool deve aggiungere il minimo stato possibile e lasciare Git come unica fonte autorevole del versioning.
+The tool must add as little state as possible and leave Git as the single authoritative source of versioning.

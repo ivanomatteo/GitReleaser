@@ -1,31 +1,31 @@
 # Git Releaser
 
-CLI Go per versionare e rilasciare in modo indipendente i microservizi di un monorepo. I tag Git nel formato `<service>/v<semver>` sono l'unica fonte delle versioni: il progetto non usa file `VERSION`.
+A Go CLI to version and release the microservices of a monorepo independently. Git tags in the `<service>/v<semver>` format are the only source of versions: the project does not use `VERSION` files.
 
-Supporta anche i repo standard con l'opzione --root, l'utilità in questo caso è ovviamente inferiore e non necessita di file di configurazione.
+It also supports standard repositories with the `--root` option; in that case its usefulness is obviously smaller, and no configuration file is needed.
 
-## Che problema risolve?
+## What problem does it solve?
 
-In un monorepo con più microservizi, il repository Git è condiviso ma le release spesso sono indipendenti.
+In a monorepo with multiple microservices, the Git repository is shared, but releases are often independent.
 
-Un servizio può essere alla `2.4.1`, un altro alla `1.8.3`, e una modifica a un modulo `common` può rendere necessario rilasciare solo alcuni servizi.
+One service may be at `2.4.1`, another at `1.8.3`, and a change to a `common` module may require releasing only some of the services.
 
-Il problema è quindi capire in modo semplice:
+The problem is therefore to easily understand:
 
-* qual è l’ultima release di ogni servizio;
-* quali modifiche sono avvenute da quella release;
-* quali servizi risultano realmente `affected`;
-* quale sarà la prossima versione o il prossimo tag.
+* what the latest release of each service is;
+* what changes happened since that release;
+* which services are actually `affected`;
+* what the next version or the next tag will be.
 
-Molti tool gestiscono il versioning mantenendo la versione anche nei sorgenti, ad esempio in `package.json`, `pom.xml` o file `VERSION`.
+Many tools manage versioning by also keeping the version in the sources, for example in `package.json`, `pom.xml` or a `VERSION` file.
 
-Questo progetto evita volutamente un secondo stato da sincronizzare e usa una sola source of truth:
+This project deliberately avoids a second piece of state to keep in sync and uses a single source of truth:
 
 ```text id="pazl0w"
-Git tag = release effettiva
+Git tag = actual release
 ```
 
-Ogni servizio utilizza tag namespacizzati:
+Each service uses namespaced tags:
 
 ```text id="3vctve"
 api/v2.4.1
@@ -33,16 +33,16 @@ worker/v1.8.3
 scraper/v0.6.0
 ```
 
-Per determinare se un servizio è cambiato, il tool confronta `HEAD` con il suo ultimo tag:
+To determine whether a service has changed, the tool compares `HEAD` with its latest tag:
 
 ```text id="qb4rxb"
 api/v2.4.1..HEAD
 worker/v1.8.3..HEAD
 ```
 
-Ogni servizio ha quindi una baseline indipendente, anche se tutti condividono la stessa history Git.
+Each service therefore has an independent baseline, even though they all share the same Git history.
 
-Le dipendenze condivise vengono dichiarate esplicitamente:
+Shared dependencies are declared explicitly:
 
 ```yaml id="7kzr6a"
 services:
@@ -54,68 +54,68 @@ services:
       - common/logging
 ```
 
-Se cambia una dipendenza, il servizio viene considerato `affected` rispetto alla propria ultima release.
+If a dependency changes, the service is considered `affected` relative to its own latest release.
 
-### Perché non usare un tool più completo?
+### Why not use a more complete tool?
 
-Esistono strumenti come Nx Release, Changesets, Lerna o release-please che offrono funzionalità molto più estese: changelog, Conventional Commits, publishing, dependency graph automatici e integrazione con specifici ecosistemi.
+There are tools such as Nx Release, Changesets, Lerna or release-please that offer much broader functionality: changelogs, Conventional Commits, publishing, automatic dependency graphs and integration with specific ecosystems.
 
-Questo progetto è **volutamente minimale**.
+This project is **deliberately minimal**.
 
-Non cerca di gestire build, deployment, package registry, changelog o workflow Git.
+It does not try to handle builds, deployment, package registries, changelogs or Git workflows.
 
-Fa essenzialmente quattro cose:
+It essentially does four things:
 
 ```text id="5bvgm2"
-trova l'ultima release
-determina se il servizio è cambiato
-calcola la prossima versione
-crea il relativo tag
+find the latest release
+determine whether the service has changed
+compute the next version
+create the corresponding tag
 ```
 
-Lavora solo con:
+It works only with:
 
 ```text id="puqgq7"
 Git
-path
-dipendenze dichiarate
+paths
+declared dependencies
 SemVer
 ```
 
-Per questo rimane indipendente dal linguaggio, dal build system e dalla piattaforma CI/CD.
+This is why it stays independent of the language, the build system and the CI/CD platform.
 
-L’idea di fondo è semplice:
+The underlying idea is simple:
 
 ```text id="u0ec5a"
 monorepo != mono-version
 repository != release unit
 ```
 
-Il repository rappresenta lo stato complessivo del codice.
+The repository represents the overall state of the code.
 
-I tag rappresentano invece le release delle singole unità deployabili.
+Tags, instead, represent the releases of the individual deployable units.
 
 
-## Requisiti e build
+## Requirements and build
 
-Sono richiesti Go 1.27 o successivo e Git disponibile nel `PATH`.
+Go 1.27 or later and Git available in the `PATH` are required.
 
-I binari precompilati per Linux, macOS e Windows sono disponibili nella [release più recente su GitHub](https://github.com/ivanomatteo/GitReleaser/releases/latest).
+Prebuilt binaries for Linux, macOS and Windows are available in the [latest release on GitHub](https://github.com/ivanomatteo/GitReleaser/releases/latest).
 
 ```sh
 CGO_ENABLED=0 go build -o releaser ./cmd/releaser
 ```
 
-Tutti i comandi operano sul repository corrente e leggono `releaser.yml`. Le opzioni globali permettono di cambiare entrambi:
+All commands operate on the current repository and read `releaser.yml`. Global options let you change both:
 
 ```text
--c, --config string   file di configurazione (default "releaser.yml")
-    --repo string     directory del repository Git (default ".")
+-c, --config string   configuration file (default "releaser.yml")
+    --repo string     Git repository directory (default ".")
 ```
 
-Il `releaser.yml` predefinito viene cercato nella directory indicata da `--repo`, quindi `releaser --repo ../monorepo status` funziona da qualsiasi directory. Un `--config` relativo passato esplicitamente è invece risolto rispetto alla directory corrente.
+The default `releaser.yml` is looked up in the directory given by `--repo`, so `releaser --repo ../monorepo status` works from any directory. An explicitly passed relative `--config`, instead, is resolved against the current directory.
 
-## Configurazione
+## Configuration
 
 ```yaml
 remote: origin
@@ -144,19 +144,19 @@ services:
       - common/logging
 ```
 
-`paths` identifica il codice del servizio, `dependencies` aggiunge directory condivise che possono renderlo affected, `ignore` esclude glob specifici e `vars` contiene valori stringa chiave-valore specifici del servizio. L'`ignore` alla radice vale per tutti i servizi. `remote` è usato solo da `release --push` e, se omesso, vale `origin`.
+`paths` identifies the service's code, `dependencies` adds shared directories that can make it affected, `ignore` excludes specific globs and `vars` holds service-specific string key-value pairs. The root-level `ignore` applies to all services. `remote` is used only by `release --push` and defaults to `origin` when omitted.
 
-`paths` è obbligatorio, gli altri campi sono facoltativi. Le chiavi sconosciute (per esempio un refuso come `dependecies`) sono un errore di configurazione. I nomi dei servizi devono essere validi come componente di un tag Git: niente `/`, spazi, `~ ^ : ? * [ \`, `..` o `@{`, e non possono iniziare con `.` o `-` né terminare con `.` o `.lock`.
+`paths` is required; the other fields are optional. Unknown keys (for example a typo such as `dependecies`) are a configuration error. Service names must be valid as a Git tag component: no `/`, spaces, `~ ^ : ? * [ \`, `..` or `@{`, and they cannot start with `.` or `-` or end with `.` or `.lock`.
 
-I glob di `ignore` supportano `**` (qualsiasi numero di directory), `*` e `?` (all'interno di un singolo segmento di path); gli altri caratteri sono letterali. Per un file rinominato vengono valutati sia il path precedente sia quello nuovo: il servizio è affected se almeno uno dei due appartiene ai suoi `paths`/`dependencies` e non è ignorato, e `changes` riporta solo i path rilevanti.
+`ignore` globs support `**` (any number of directories), `*` and `?` (within a single path segment); all other characters are literal. For a renamed file both the old and the new path are evaluated: the service is affected if at least one of them belongs to its `paths`/`dependencies` and is not ignored, and `changes` reports only the relevant paths.
 
-Verifica la configurazione con:
+Check the configuration with:
 
 ```sh
 releaser config check
 ```
 
-Le variabili sono recuperabili senza accedere a Git e il comando stampa esclusivamente il valore, così da poterlo usare negli script:
+Variables can be retrieved without accessing Git, and the command prints only the value, so it can be used in scripts:
 
 ```sh
 releaser get-var api image
@@ -165,11 +165,11 @@ releaser get-var api image
 IMAGE=$(releaser get-var api image)
 ```
 
-Il comando fallisce se il servizio o la chiave non esistono. I valori di `vars` devono essere stringhe; numeri e booleani vanno quindi racchiusi tra virgolette.
+The command fails if the service or the key does not exist. `vars` values must be strings, so numbers and booleans must be quoted.
 
-## Comandi di versione
+## Version commands
 
-Questi comandi scrivono su stdout esclusivamente il valore richiesto, quindi possono essere usati direttamente negli script. Richiedono che il servizio abbia già almeno un tag valido.
+These commands write only the requested value to stdout, so they can be used directly in scripts. They require the service to already have at least one valid tag.
 
 ```sh
 releaser version-number api
@@ -185,18 +185,18 @@ releaser next-version-tag api minor
 # api/v2.5.0
 ```
 
-I bump ammessi sono `patch`, `minor` e `major`. I comandi `next-version-*` calcolano soltanto il valore e non creano tag.
+The allowed bumps are `patch`, `minor` and `major`. The `next-version-*` commands only compute the value and do not create tags.
 
-Esempio CI:
+CI example:
 
 ```sh
 VERSION=$(releaser version-number api)
 IMAGE_TAG=$(releaser next-version-number api patch)
 ```
 
-## Stato e modifiche
+## Status and changes
 
-`status` confronta, per ogni servizio, il suo ultimo tag con `HEAD` e considera sia `paths` sia `dependencies`:
+`status` compares, for each service, its latest tag with `HEAD` and takes both `paths` and `dependencies` into account:
 
 ```sh
 releaser status
@@ -204,30 +204,30 @@ releaser status api
 releaser status api --verbose
 ```
 
-L'output compatto riporta servizio, ultima versione e stato affected. La modalità verbose include anche il tag e i file modificati. Un servizio privo di release è considerato affected e mostra `none` come versione.
+The compact output shows the service, the latest version and the affected state. Verbose mode also includes the tag and the changed files. A service with no release is considered affected and shows `none` as its version.
 
-Per ottenere solo i nomi dei servizi affected, uno per riga:
+To get only the names of the affected services, one per line:
 
 ```sh
 releaser affected
 ```
 
-Per ottenere solo i file che rendono affected un servizio:
+To get only the files that make a service affected:
 
 ```sh
 releaser changes api
 ```
 
-I comandi read-only confrontano commit Git e ignorano le modifiche non committate nella working tree.
+Read-only commands compare Git commits and ignore uncommitted changes in the working tree.
 
-## Piano di release
+## Release plan
 
 ```sh
 releaser plan
 releaser plan --format json
 ```
 
-Il formato tabellare mostra versione, stato affected e numero di file modificati. Il formato JSON è adatto alle pipeline:
+The table format shows the version, the affected state and the number of changed files. The JSON format is suitable for pipelines:
 
 ```json
 {
@@ -243,11 +243,11 @@ Il formato tabellare mostra versione, stato affected e numero di file modificati
 }
 ```
 
-Per un servizio mai rilasciato, `lastVersion` e `lastTag` valgono `null`.
+For a service that has never been released, `lastVersion` and `lastTag` are `null`.
 
-## Creazione di una release
+## Creating a release
 
-Per incrementare l'ultima versione e creare un tag annotato su `HEAD`:
+To bump the latest version and create an annotated tag on `HEAD`:
 
 ```sh
 releaser release api patch
@@ -255,107 +255,107 @@ releaser release api minor
 releaser release api major
 ```
 
-Il tag risultante ha forma `api/v2.4.2` e messaggio `Release api v2.4.2`. La working tree deve essere pulita: nessuna modifica ai file tracciati. I file non tracciati sono ignorati.
+The resulting tag looks like `api/v2.4.2`, with the message `Release api v2.4.2`. The working tree must be clean: no changes to tracked files. Untracked files are ignored.
 
-Il servizio deve essere affected, cioè deve avere modifiche rilevanti successive alla sua ultima release. In caso contrario il comando termina con un errore. Per creare intenzionalmente un tag anche senza modifiche del servizio, usa `--force`:
+The service must be affected, that is, it must have relevant changes after its latest release. Otherwise the command exits with an error. To intentionally create a tag even without changes to the service, use `--force`:
 
 ```sh
 releaser release api patch --force
 ```
 
-Per vedere il risultato senza creare il tag:
+To see the result without creating the tag:
 
 ```sh
 releaser release api minor --dry-run
 ```
 
-Per il bootstrap di un servizio senza tag, o per impostare una versione precisa, usa una SemVer valida senza prefisso `v`:
+To bootstrap a service with no tags, or to set a specific version, use a valid SemVer without the `v` prefix:
 
 ```sh
 releaser release new-service --version 1.0.0
 ```
 
-Per inizializzare in una sola operazione tutti i servizi configurati che non hanno ancora un tag valido, usa `--new`:
+To initialize, in a single operation, all configured services that do not have a valid tag yet, use `--new`:
 
 ```sh
 releaser release --new
-# crea <service>/v0.1.0 per ogni servizio mai rilasciato
+# creates <service>/v0.1.0 for every service never released
 
 releaser release --new --version 1.0.0
-# usa 1.0.0 come versione iniziale
+# uses 1.0.0 as the initial version
 ```
 
-I servizi che hanno già almeno un tag valido secondo lo schema `<service>/v<semver>` vengono ignorati. Se `--version` non è specificato, la versione iniziale predefinita è `0.1.0`. `--new` non accetta un nome di servizio o un bump e non può essere combinato con `--affected`, `--all`, `--root` o `--force`; supporta invece `--dry-run` e `--push`.
+Services that already have at least one valid tag according to the `<service>/v<semver>` scheme are skipped. If `--version` is not specified, the default initial version is `0.1.0`. `--new` does not accept a service name or a bump and cannot be combined with `--affected`, `--all`, `--root` or `--force`; it does support `--dry-run` and `--push`.
 
-`--version` e un bump non possono essere usati insieme. Il parsing è strict: valori come `1.2`, `v1.2.3` e `01.2.3` non sono accettati. Se il servizio ha già una release, la versione esplicita deve essere maggiore dell'ultima; con `--force` il tag viene creato comunque, ma non diventa l'ultima release, perché questa è sempre la SemVer più alta.
+`--version` and a bump cannot be used together. Parsing is strict: values such as `1.2`, `v1.2.3` and `01.2.3` are not accepted. If the service already has a release, the explicit version must be greater than the latest one; with `--force` the tag is created anyway, but it does not become the latest release, because that is always the highest SemVer.
 
-Prerelease e build metadata sono tag validi (`api/v2.1.0-rc.1`, `api/v1.0.0+build.5`). Una prerelease partecipa all'ordinamento SemVer (`2.0.0` < `2.1.0-rc.1` < `2.1.0`), quindi può essere l'ultima release restituita da `version-number`. Da `2.1.0-rc.1` il bump `patch` produce `2.1.0`, `minor` produce `2.2.0` e `major` produce `3.0.0`.
+Prereleases and build metadata are valid tags (`api/v2.1.0-rc.1`, `api/v1.0.0+build.5`). A prerelease takes part in SemVer ordering (`2.0.0` < `2.1.0-rc.1` < `2.1.0`), so it can be the latest release returned by `version-number`. From `2.1.0-rc.1`, the `patch` bump produces `2.1.0`, `minor` produces `2.2.0` and `major` produces `3.0.0`.
 
-Il tag rimane locale salvo richiesta esplicita:
+The tag stays local unless explicitly requested:
 
 ```sh
 releaser release api patch --push
 ```
 
-Con `--push`, il comando pubblica soltanto i nuovi tag sul remote configurato, con un unico push atomico: o arrivano tutti sul remote o nessuno. Se la creazione o il push falliscono, i tag locali creati dal comando vengono eliminati, così il comando può essere rilanciato. Non vengono eseguiti fetch, pull, build o deploy impliciti.
+With `--push`, the command publishes only the new tags to the configured remote, with a single atomic push: either they all reach the remote or none do. If creation or push fails, the local tags created by the command are deleted, so the command can be rerun. No implicit fetch, pull, build or deploy is performed.
 
-### Release in blocco
+### Bulk release
 
-Per applicare lo stesso bump a tutti e soli i servizi affected:
+To apply the same bump to all and only the affected services:
 
 ```sh
 releaser release --affected patch
 ```
 
-Per applicarlo a tutti i servizi configurati, inclusi quelli non affected, occorre confermare esplicitamente con `--force`:
+To apply it to all configured services, including those that are not affected, you must confirm explicitly with `--force`:
 
 ```sh
 releaser release --all --force major
 ```
 
-Il comando valida l'intero batch prima di creare tag. Ogni servizio deve avere una release precedente, perché la versione esplicita non è supportata in modalità bulk. `--dry-run` e `--push` sono disponibili anche per le release in blocco; con `--push` tutti i tag creati vengono pubblicati sul remote configurato in un unico push atomico.
+The command validates the whole batch before creating any tag. Every service must have a previous release, because explicit versions are not supported in bulk mode. `--dry-run` and `--push` are also available for bulk releases; with `--push`, all created tags are published to the configured remote in a single atomic push.
 
-### Repository standard (root)
+### Standard repository (root)
 
-Per rilasciare un repository standard, non organizzato come monorepo, usa `--root`. In questa modalità `releaser.yml` non è letto:
+To release a standard repository, not organized as a monorepo, use `--root`. In this mode `releaser.yml` is not read:
 
 ```sh
 releaser release --root patch
 releaser release --root --version 1.0.0
 ```
 
-Il tag predefinito non ha prefix, per esempio `v0.1.5`. Se esiste già una release, il prefix viene dedotto dai tag precedenti; se vengono trovati prefix eterogenei, `--prefix` diventa obbligatorio. Nella deduzione un prefix è valido solo se vuoto o se termina con un separatore (`/`, `-`, `_`, `.`): `release-v1.0.0` ha prefix `release-`, mentre `dev1.0.0` non è considerato un tag di release. Un valore esplicitamente vuoto (`--prefix=''`) seleziona tag senza prefix:
+The default tag has no prefix, for example `v0.1.5`. If a release already exists, the prefix is inferred from previous tags; if mixed prefixes are found, `--prefix` becomes mandatory. During inference a prefix is valid only if it is empty or ends with a separator (`/`, `-`, `_`, `.`): `release-v1.0.0` has the prefix `release-`, while `dev1.0.0` is not considered a release tag. An explicitly empty value (`--prefix=''`) selects tags without a prefix:
 
 ```sh
 releaser release --root patch --prefix=''
 releaser release --root minor --prefix='release-'
 ```
 
-Se non ci sono commit con modifiche dopo il tag precedente, la release richiede `--force`. `--dry-run` e `--push` sono supportati; il push usa `origin`. `--root` è mutuamente esclusivo con `--affected` e `--all`.
+If there are no commits with changes after the previous tag, the release requires `--force`. `--dry-run` and `--push` are supported; the push uses `origin`. `--root` is mutually exclusive with `--affected` and `--all`.
 
-## Esecuzione di script per servizio
+## Running scripts per service
 
-`run` esegue uno script (o un qualsiasi comando) una volta per ogni servizio configurato, in ordine alfabetico, oppure solo per il servizio indicato:
+`run` runs a script (or any command) once for each configured service, in alphabetical order, or only for the given service:
 
 ```sh
-releaser run build.sh           # una volta per servizio
-releaser run api build.sh       # solo per api
-releaser run --affected build.sh  # solo per i servizi affected
-releaser run api build.sh -- --push latest  # argomenti passati allo script
+releaser run build.sh           # once per service
+releaser run api build.sh       # only for api
+releaser run --affected build.sh  # only for affected services
+releaser run api build.sh -- --push latest  # arguments passed to the script
 ```
 
-Allo script sono esposte queste variabili d'ambiente:
+The script receives these environment variables:
 
-| Variabile | Valore |
+| Variable | Value |
 | --- | --- |
-| `RELEASER_NAME` | nome del servizio |
-| `RELEASER_PATHS` | `paths` separati da spazio |
-| `RELEASER_DEPS` | `dependencies` separate da spazio (vuota se assenti) |
-| `RELEASER_VERSION` | ultima versione rilasciata, per esempio `2.4.1` (vuota se non disponibile) |
-| `RELEASER_TAG` | tag dell'ultima release, per esempio `api/v2.4.1` (vuota se non disponibile) |
-| `RELEASER_VAR_<KEY>` | una per ogni chiave di `vars`, in maiuscolo e con `-` sostituito da `_` |
+| `RELEASER_NAME` | service name |
+| `RELEASER_PATHS` | space-separated `paths` |
+| `RELEASER_DEPS` | space-separated `dependencies` (empty if none) |
+| `RELEASER_VERSION` | latest released version, for example `2.4.1` (empty if not available) |
+| `RELEASER_TAG` | latest release tag, for example `api/v2.4.1` (empty if not available) |
+| `RELEASER_VAR_<KEY>` | one for each `vars` key, uppercased and with `-` replaced by `_` |
 
-Con la configurazione di esempio, per `api` lo script riceve `RELEASER_VAR_IMAGE=registry.example.com/project/api` e `RELEASER_VAR_DEPLOYMENT=api-production`:
+With the example configuration, for `api` the script receives `RELEASER_VAR_IMAGE=registry.example.com/project/api` and `RELEASER_VAR_DEPLOYMENT=api-production`:
 
 ```sh
 #!/bin/sh
@@ -364,32 +364,32 @@ for p in $RELEASER_PATHS; do echo "path: $p"; done
 docker build -t "$RELEASER_VAR_IMAGE" "services/$RELEASER_NAME"
 ```
 
-Lo script è eseguito dalla root del repository (`--repo`); se il percorso indicato esiste rispetto alla directory corrente viene eseguito direttamente (deve essere eseguibile e avere uno shebang), altrimenti è cercato nel `PATH`. Stdin, stdout e stderr sono quelli di `releaser`; prima di ogni esecuzione su stderr è stampata la riga `==> <service>`.
+The script runs from the repository root (`--repo`); if the given path exists relative to the current directory it is executed directly (it must be executable and have a shebang), otherwise it is looked up in the `PATH`. Stdin, stdout and stderr are those of `releaser`; before each run the line `==> <service>` is printed to stderr.
 
-L'esecuzione si ferma al primo script che fallisce e `releaser` termina con lo stesso exit code dello script. Prima di eseguire qualsiasi script tutte le variabili vengono validate: una chiave di `vars` che non produce un nome valido (solo lettere, cifre, `_` e `-`), due chiavi che producono lo stesso nome (per esempio `my-var` e `my_var`) o un path contenente spazi sono un errore di configurazione. `RELEASER_VERSION` e `RELEASER_TAG` sono vuote per un servizio mai rilasciato o se `--repo` non è un repository Git: in quel caso `run` funziona comunque, tranne con `--affected`.
+Execution stops at the first failing script, and `releaser` exits with the same exit code as the script. Before running any script, all variables are validated: a `vars` key that does not produce a valid name (only letters, digits, `_` and `-`), two keys that produce the same name (for example `my-var` and `my_var`) or a path containing spaces are a configuration error. `RELEASER_VERSION` and `RELEASER_TAG` are empty for a service that has never been released or if `--repo` is not a Git repository: in that case `run` still works, except with `--affected`.
 
-## Generazione di file da template
+## Generating files from templates
 
-`template` esegue un template Go ([`text/template`](https://pkg.go.dev/text/template)) una volta per ogni servizio configurato, in ordine alfabetico, oppure solo per il servizio indicato:
+`template` executes a Go template ([`text/template`](https://pkg.go.dev/text/template)) once for each configured service, in alphabetical order, or only for the given service:
 
 ```sh
-releaser template deploy.yaml.tpl                  # tutti i servizi, concatenati su stdout
-releaser template api deploy.yaml.tpl > api.yaml   # solo api
-releaser template deploy.yaml.tpl -o 'deploy/{{.Name}}.yaml'  # un file per servizio
+releaser template deploy.yaml.tpl                  # all services, concatenated on stdout
+releaser template api deploy.yaml.tpl > api.yaml   # only api
+releaser template deploy.yaml.tpl -o 'deploy/{{.Name}}.yaml'  # one file per service
 ```
 
-Nel template sono disponibili:
+The template has access to:
 
-| Campo | Valore |
+| Field | Value |
 | --- | --- |
-| `.Name` | nome del servizio |
-| `.Paths` | lista dei `paths` |
-| `.Deps` | lista delle `dependencies` |
-| `.Version` | ultima versione rilasciata, per esempio `2.4.1` (vuota se non disponibile) |
-| `.Tag` | tag dell'ultima release, per esempio `api/v2.4.1` (vuota se non disponibile) |
-| `.Vars` | mappa delle `vars`, con `-` sostituito da `_` nelle chiavi |
+| `.Name` | service name |
+| `.Paths` | list of `paths` |
+| `.Deps` | list of `dependencies` |
+| `.Version` | latest released version, for example `2.4.1` (empty if not available) |
+| `.Tag` | latest release tag, for example `api/v2.4.1` (empty if not available) |
+| `.Vars` | map of `vars`, with `-` replaced by `_` in the keys |
 
-Con la configurazione di esempio, il template:
+With the example configuration, the template:
 
 ```yaml
 apiVersion: apps/v1
@@ -405,7 +405,7 @@ spec:
 ---
 ```
 
-produce per `api`:
+produces for `api`:
 
 ```yaml
 apiVersion: apps/v1
@@ -421,28 +421,28 @@ spec:
 ---
 ```
 
-Le liste si scorrono con `range`, per esempio `{{range .Paths}}{{.}} {{end}}`. Una chiave mancante in `.Vars` (per esempio un refuso come `{{.Vars.imgae}}`) è un errore; per una variabile facoltativa usa `index`, che restituisce una stringa vuota: `{{with index .Vars "port"}}port: {{.}}{{end}}`.
+Lists are iterated with `range`, for example `{{range .Paths}}{{.}} {{end}}`. A missing key in `.Vars` (for example a typo such as `{{.Vars.imgae}}`) is an error; for an optional variable use `index`, which returns an empty string: `{{with index .Vars "port"}}port: {{.}}{{end}}`.
 
-Nei template un nome dopo il punto non può contenere `-`, quindi nelle chiavi di `.Vars` ogni `-` è sostituito da `_`: la variabile `docker-file` si scrive `{{.Vars.docker_file}}`. Due chiavi che producono lo stesso nome (per esempio `docker-file` e `docker_file`) sono un errore di configurazione.
+In templates a name after the dot cannot contain `-`, so in `.Vars` keys every `-` is replaced by `_`: the variable `docker-file` is written `{{.Vars.docker_file}}`. Two keys that produce the same name (for example `docker-file` and `docker_file`) are a configuration error.
 
-Senza `-o` l'output di tutti i servizi è scritto su stdout, uno dopo l'altro. Con `-o`/`--output` ogni servizio è scritto in un file; il path di output è a sua volta un template con gli stessi campi e deve essere diverso per ogni servizio (tipicamente contiene `{{.Name}}`). Le directory mancanti vengono create, i file esistenti sovrascritti, e su stdout è stampato il path di ogni file scritto. Il path del template e quello di output sono relativi alla directory corrente.
+Without `-o`, the output of all services is written to stdout, one after the other. With `-o`/`--output`, each service is written to a file; the output path is itself a template with the same fields and must be different for each service (it typically contains `{{.Name}}`). Missing directories are created, existing files are overwritten, and the path of each written file is printed to stdout. The template path and the output path are relative to the current directory.
 
-Tutti i servizi sono renderizzati prima di scrivere: se il template fallisce per un servizio non viene scritto nulla. `.Version` e `.Tag` sono vuoti per un servizio mai rilasciato o se `--repo` non è un repository Git.
+All services are rendered before writing: if the template fails for one service, nothing is written. `.Version` and `.Tag` are empty for a service that has never been released or if `--repo` is not a Git repository.
 
-## Exit code ed errori
+## Exit codes and errors
 
-Gli errori sono scritti su stderr con prefisso `ERROR:`. Gli exit code sono:
+Errors are written to stderr with the `ERROR:` prefix. The exit codes are:
 
-| Codice | Significato |
+| Code | Meaning |
 | ---: | --- |
-| 0 | successo |
-| 1 | input non valido, servizio/versione non disponibile o stato non valido |
-| 2 | configurazione non leggibile o non valida |
-| 3 | repository, history o operazione Git non disponibile |
+| 0 | success |
+| 1 | invalid input, service/version not available or invalid state |
+| 2 | unreadable or invalid configuration |
+| 3 | repository, history or Git operation not available |
 
-In una shallow clone occorre rendere disponibili tag e history necessari prima di eseguire il tool; `releaser` non accede automaticamente alla rete. Se la history tra un tag e `HEAD` manca, il comando fallisce con exit code 3 invece di riportare un risultato potenzialmente errato.
+In a shallow clone, the required tags and history must be made available before running the tool; `releaser` does not access the network automatically. If the history between a tag and `HEAD` is missing, the command fails with exit code 3 instead of reporting a potentially wrong result.
 
-## Elenco rapido
+## Quick reference
 
 ```text
 releaser config check
@@ -465,4 +465,4 @@ releaser release --root <patch|minor|major> [--prefix=<prefix>] [--dry-run] [--p
 releaser release --root --version <semver> [--prefix=<prefix>] [--dry-run] [--push]
 ```
 
-Usa `releaser --help` o `releaser <comando> --help` per l'help integrato.
+Use `releaser --help` or `releaser <command> --help` for the built-in help.
